@@ -17,10 +17,15 @@ See [PLAN.md](PLAN.md) for the research this design is based on.
 ## Build & run
 
 ```sh
-make run        # builds, assembles dist/LocalFlow.app, launches it
+make run        # builds, assembles dist/LocalFlow.app, launches from dist/ (dev loop)
+make install    # builds + installs to /Applications — launchable from Spotlight/Launchpad/Finder
 ```
 
+`make install` is the "use it like a normal app" path: it copies `LocalFlow.app` into `/Applications` (quitting any running copy first) so Spotlight, Launchpad, and Finder can find and launch it. It has a proper app icon, and Settings has a **Launch at login** toggle so the hotkey is always live without relaunching.
+
 First launch downloads the Whisper model (~626 MB) and compiles it for the Neural Engine — the first transcription takes ~1 min extra, one time only. After that: ~2.7 s for 10 s of speech on an M4, +~1.3 s if AI cleanup is on.
+
+> LocalFlow is a menu-bar (accessory) app, so it has no permanent Dock icon. The Dock icon appears only briefly while the Settings window is open — that's what lets the shortcut recorder capture your keys (an accessory window otherwise can't become focused). The app icon (`Support/AppIcon.icns`) is regenerated from an SF Symbol via `Support/make-icon.sh` when the design changes.
 
 ### Permissions
 
@@ -39,7 +44,7 @@ Grant when prompted (System Settings → Privacy & Security):
 2. Hold **⌥ Option+Space**, speak, release.
 3. The waveform pill shows it's listening; text lands at your cursor.
 
-Menu bar icon → **Settings…** to change the hotkey, pick a language (default: auto-detect), or toggle AI cleanup.
+Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortcuts, pick a language (default: auto-detect) or model, toggle AI cleanup, or enable **Launch at login**.
 
 Headless pipeline test (no mic/UI):
 
@@ -81,4 +86,5 @@ then launch and grant permissions. The model still auto-downloads on first run (
 | `OllamaCleaner.swift` | local LLM formatting pass (never blocks dictation) |
 | `TextInjector.swift` | clipboard-preserving paste-at-cursor |
 | `RecordingOverlay.swift` | floating waveform pill (non-activating panel) |
-| `LocalFlowApp.swift` | menu bar UI, Settings, headless test CLI |
+| `LoginItem.swift` | launch-at-login toggle via `SMAppService` |
+| `LocalFlowApp.swift` | menu bar UI, Settings, activation-policy flip for a focusable Settings window, headless test CLI |

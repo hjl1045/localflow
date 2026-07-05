@@ -49,7 +49,57 @@ enum Main {
     }
 }
 
+/// In an `LSUIElement` (`.accessory`) app the Settings window never becomes
+/// truly *key*, so `KeyboardShortcuts.Recorder` silently swallows keypresses
+/// (you can't change the shortcut) and pickers are flaky. We briefly promote
+/// the app to `.regular` while Settings is open — the window then becomes key
+/// and the recorder works — and drop back to `.accessory` when it closes, so
+/// there's no lingering Dock icon.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: nil
+        )
+    }
+
+    /// Open Settings and make it interactive. Called from the menu.
+    @MainActor
+    func showSettings() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        // Ventura+ selector; fall back to the pre-Ventura name just in case.
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
+    }
+
+    @objc private func windowWillClose(_ note: Notification) {
+        guard let closing = note.object as? NSWindow, isSettingsWindow(closing) else { return }
+        // Recount once the window is actually gone; revert to accessory when no
+        // Settings window remains, dropping the transient Dock icon.
+        DispatchQueue.main.async {
+            let stillOpen = NSApp.windows.contains {
+                $0 !== closing && self.isSettingsWindow($0) && $0.isVisible
+            }
+            if !stillOpen {
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
+    }
+
+    /// The Settings window is a normal titled window; the recording overlay is a
+    /// borderless `NSPanel` and the menu-bar extra has no standard window, so
+    /// neither of those trips the policy flip.
+    private func isSettingsWindow(_ window: NSWindow) -> Bool {
+        !(window is NSPanel) && window.styleMask.contains(.titled)
+    }
+}
+
 struct LocalFlowApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appState = AppState()
 
     var body: some Scene {
@@ -84,11 +134,11 @@ struct MenuContent: View {
         if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleDictation) {
             Text("Tap \(shortcut.description) for hands-free")
         }
-        // NOTE: a plain SettingsLink opens the window but, in an LSUIElement
-        // (accessory) app, never activates us — so the window isn't key and its
-        // controls ignore clicks. Activating first makes Settings interactive.
+        // A plain SettingsLink opens the window but, in an LSUIElement app, it
+        // stays unfocused so the shortcut recorder can't capture keys. The app
+        // delegate promotes us to a regular app while Settings is open.
         Button("Settings…") {
-            openSettings()
+            (NSApp.delegate as? AppDelegate)?.showSettings()
         }
         Divider()
         Button("Quit LocalFlow") {
@@ -96,18 +146,11 @@ struct MenuContent: View {
         }
         .keyboardShortcut("q")
     }
-
-    private func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        // Ventura+ selector; fall back to the pre-Ventura name just in case.
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
-    }
 }
 
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var launchAtLogin = LoginItem.isEnabled
 
     var body: some View {
         Form {
@@ -124,6 +167,11 @@ struct SettingsView: View {
                 }
             }
             Toggle("Clean up transcript with Ollama (\(OllamaCleaner.model))", isOn: $appState.cleanupEnabled)
+            Toggle("Launch at login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { _, newValue in
+                    LoginItem.setEnabled(newValue)
+                    launchAtLogin = LoginItem.isEnabled // re-sync if registration failed
+                }
             Text("Hold the push-to-talk key, or tap the hands-free key to start and again to stop. Text is typed at your cursor. Smaller models are faster but less accurate.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

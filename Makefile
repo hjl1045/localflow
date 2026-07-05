@@ -11,7 +11,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run clean
+.PHONY: build bundle run install clean
 
 build:
 	swift build -c $(CONFIG)
@@ -22,6 +22,7 @@ bundle: build
 	rm -rf $(BUNDLE)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
 	cp Support/Info.plist $(CONTENTS)/Info.plist
+	cp Support/AppIcon.icns $(CONTENTS)/Resources/AppIcon.icns
 	cp $(BUILD)/$(APP) $(CONTENTS)/MacOS/$(APP)
 	printf 'APPL????' > $(CONTENTS)/PkgInfo
 	@# SPM resource bundles (KeyboardShortcuts localizations, etc.)
@@ -33,6 +34,15 @@ bundle: build
 
 run: bundle
 	open $(BUNDLE)
+
+# Install into /Applications so Spotlight, Launchpad, and Finder can launch it
+# like any app. Quit any running copy first so it can be replaced, then relaunch.
+install: bundle
+	-pkill -x $(APP)
+	rm -rf /Applications/$(APP).app
+	cp -R $(BUNDLE) /Applications/$(APP).app
+	@echo "Installed /Applications/$(APP).app — launch it from Spotlight or Launchpad."
+	open /Applications/$(APP).app
 
 clean:
 	rm -rf .build dist
