@@ -2,6 +2,9 @@ import AppKit
 import AVFoundation
 import KeyboardShortcuts
 import SwiftUI
+import os
+
+private let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "pipeline")
 
 extension KeyboardShortcuts.Name {
     /// Hold to record, release to transcribe + inject.
@@ -98,19 +101,25 @@ final class AppState: ObservableObject {
     }
 
     private func startRecording() {
+        log.notice("keyDown: status=\(String(describing: self.status))")
         guard status == .idle else { return } // ignore key-repeat and busy states
         do {
             try recorder.start()
             status = .recording
             overlay.show(.listening)
         } catch {
+            log.error("mic start failed: \(error.localizedDescription)")
             status = .error("Mic start failed: \(error.localizedDescription)")
         }
     }
 
     private func stopAndTranscribe() {
-        guard status == .recording else { return }
+        guard status == .recording else {
+            log.notice("keyUp ignored: status=\(String(describing: self.status))")
+            return
+        }
         let samples = recorder.stop()
+        log.notice("keyUp: captured \(samples.count) samples (\(Double(samples.count) / 16_000, format: .fixed(precision: 1))s)")
 
         // Anything under ~0.3 s is an accidental tap; Whisper hallucinates on near-silence.
         guard samples.count > 4800 else {
@@ -122,10 +131,12 @@ final class AppState: ObservableObject {
         status = .transcribing
         overlay.show(.processing)
         let language = languageCode == "auto" ? nil : languageCode
+        log.notice("transcribing: language=\(language ?? "auto")")
         Task {
             defer { overlay.hide() }
             do {
                 var text = try await transcriber.transcribe(samples, language: language)
+                log.notice("transcript: \(text.count) chars")
                 guard !text.isEmpty else {
                     status = .idle
                     return
@@ -134,11 +145,27 @@ final class AppState: ObservableObject {
                     status = .cleaning
                     if let cleaned = await OllamaCleaner.clean(text) {
                         text = cleaned
-                    } // on nil (Ollama down/timeout) fall back to the raw transcript
+                        log.notice("cleanup ok: \(text.count) chars")
+                    } else {
+                        log.warning("cleanup unavailable, using raw transcript")
+                    }
                 }
-                TextInjector.inject(text)
-                status = .idle
+                if TextInjector.inject(text) {
+                    status = .idle
+                } else {
+                    // Accessibility missing — CGEvent paste would silently no-op.
+                    // A stale TCC entry can SHOW as granted in System Settings while
+                    // the API still says untrusted: the fix is remove + re-add.
+                    log.error("inject refused: Accessibility not granted")
+                    status = .error("Accessibility needed: remove LocalFlow from the Accessibility list (−), then re-add it (+).")
+                    TextInjector.openAccessibilitySettings()
+                    // Recover automatically so the hotkey keeps working —
+                    // inject() re-checks trust on every attempt anyway.
+                    try? await Task.sleep(for: .seconds(4))
+                    if case .error = status { status = .idle }
+                }
             } catch {
+                log.error("transcription failed: \(error.localizedDescription)")
                 status = .error("Transcription failed: \(error.localizedDescription)")
                 try? await Task.sleep(for: .seconds(3))
                 if case .error = status { status = .idle }

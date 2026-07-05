@@ -4,6 +4,13 @@ BUILD   := .build/$(CONFIG)
 BUNDLE  := dist/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
 
+# Prefer a stable Apple Development identity so the code signature (and the
+# TCC Accessibility grant tied to it) survives rebuilds; fall back to ad-hoc.
+SIGN := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/{print $$2; exit}')
+ifeq ($(SIGN),)
+SIGN := -
+endif
+
 .PHONY: build bundle run clean
 
 build:
@@ -21,7 +28,7 @@ bundle: build
 	@for b in $(BUILD)/*.bundle; do \
 		[ -e "$$b" ] && cp -R "$$b" $(CONTENTS)/Resources/ || true; \
 	done
-	codesign --force --deep --sign - --identifier ai.xdlab.LocalFlow $(BUNDLE)
+	codesign --force --deep --sign "$(SIGN)" --identifier ai.xdlab.LocalFlow $(BUNDLE)
 	@echo "Built $(BUNDLE)"
 
 run: bundle
