@@ -5,16 +5,24 @@ import WhisperKit
 /// and serializes transcription requests.
 actor Transcriber {
     /// Compressed Whisper Large-v3-Turbo (~0.6 GB) — the balanced
-    /// latency/accuracy pick from PLAN.md. WhisperKit fuzzy-matches this
-    /// against the argmaxinc/whisperkit-coreml model repo.
-    static let modelName = "large-v3-v20240930_626MB"
+    /// latency/accuracy pick from PLAN.md. WhisperKit fuzzy-matches these
+    /// names against the argmaxinc/whisperkit-coreml model repo.
+    static let defaultModel = "large-v3-v20240930_626MB"
 
     private var whisperKit: WhisperKit?
+    private(set) var currentModel: String?
 
-    func load() async throws {
-        guard whisperKit == nil else { return }
-        let config = WhisperKitConfig(model: Self.modelName)
+    /// Loads `model`, downloading + compiling it on first use. A no-op if
+    /// that model is already loaded; otherwise it swaps the active model.
+    func load(_ model: String = defaultModel) async throws {
+        if whisperKit != nil, currentModel == model { return }
+        whisperKit = nil
+        // prewarm runs the CoreML→ANE specialization now (during the visible
+        // "Loading model…" phase) instead of stalling the user's FIRST
+        // dictation by ~60s. Every dictation afterwards is warm and fast.
+        let config = WhisperKitConfig(model: model, prewarm: true, load: true)
         whisperKit = try await WhisperKit(config)
+        currentModel = model
     }
 
     /// Headless test path: transcribe an audio file directly.

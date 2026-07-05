@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import KeyboardShortcuts
 
@@ -14,11 +15,15 @@ enum Main {
             if let langIndex = args.firstIndex(of: "--language"), args.count > langIndex + 1 {
                 language = args[langIndex + 1]
             }
+            var model = Transcriber.defaultModel
+            if let modelIndex = args.firstIndex(of: "--model"), args.count > modelIndex + 1 {
+                model = args[modelIndex + 1]
+            }
             do {
                 let transcriber = Transcriber()
-                print("Loading \(Transcriber.modelName)…")
+                print("Loading \(model)…")
                 let loadStart = Date()
-                try await transcriber.load()
+                try await transcriber.load(model)
                 print(String(format: "Model loaded in %.1fs", -loadStart.timeIntervalSinceNow))
 
                 let transcribeStart = Date()
@@ -75,17 +80,29 @@ struct MenuContent: View {
         Toggle("AI Cleanup (Ollama)", isOn: $appState.cleanupEnabled)
         if let shortcut = KeyboardShortcuts.getShortcut(for: .pushToTalk) {
             Text("Hold \(shortcut.description) to dictate")
-        } else {
-            Text("No push-to-talk key set")
         }
-        SettingsLink {
-            Text("Settings…")
+        if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleDictation) {
+            Text("Tap \(shortcut.description) for hands-free")
+        }
+        // NOTE: a plain SettingsLink opens the window but, in an LSUIElement
+        // (accessory) app, never activates us — so the window isn't key and its
+        // controls ignore clicks. Activating first makes Settings interactive.
+        Button("Settings…") {
+            openSettings()
         }
         Divider()
         Button("Quit LocalFlow") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private func openSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        // Ventura+ selector; fall back to the pre-Ventura name just in case.
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
     }
 }
 
@@ -94,18 +111,25 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            KeyboardShortcuts.Recorder("Push-to-talk key:", name: .pushToTalk)
+            KeyboardShortcuts.Recorder("Push-to-talk (hold):", name: .pushToTalk)
+            KeyboardShortcuts.Recorder("Hands-free (tap on/off):", name: .toggleDictation)
             Picker("Language:", selection: $appState.languageCode) {
                 ForEach(AppState.languages, id: \.code) { language in
                     Text(language.name).tag(language.code)
                 }
             }
+            Picker("Model:", selection: $appState.modelName) {
+                ForEach(AppState.models, id: \.id) { model in
+                    Text(model.name).tag(model.id)
+                }
+            }
             Toggle("Clean up transcript with Ollama (\(OllamaCleaner.model))", isOn: $appState.cleanupEnabled)
-            Text("Hold the key, speak, release. Text is typed at your cursor.")
+            Text("Hold the push-to-talk key, or tap the hands-free key to start and again to stop. Text is typed at your cursor. Smaller models are faster but less accurate.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(20)
-        .frame(width: 420)
+        .frame(width: 460)
     }
 }

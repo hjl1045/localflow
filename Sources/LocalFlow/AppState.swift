@@ -9,6 +9,8 @@ private let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "pipeline")
 extension KeyboardShortcuts.Name {
     /// Hold to record, release to transcribe + inject.
     static let pushToTalk = Self("pushToTalk", default: .init(.space, modifiers: [.option]))
+    /// Tap once to start hands-free recording, tap again to stop.
+    static let toggleDictation = Self("toggleDictation", default: .init(.d, modifiers: [.command, .option]))
 }
 
 @MainActor
@@ -23,7 +25,7 @@ final class AppState: ObservableObject {
 
         var label: String {
             switch self {
-            case .loadingModel: "Loading \(Transcriber.modelName)…"
+            case .loadingModel: "Loading model…"
             case .idle: "Ready"
             case .recording: "Recording…"
             case .transcribing: "Transcribing…"
@@ -44,6 +46,13 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// How the current recording was started, so push-to-talk key-up and the
+    /// hands-free toggle don't stop each other's sessions.
+    private enum RecordingMode {
+        case pushToTalk
+        case toggle
+    }
+
     /// Language picker choices: display name → ISO 639-1 code ("auto" = detect).
     static let languages: [(name: String, code: String)] = [
         ("Auto-detect", "auto"),
@@ -53,6 +62,15 @@ final class AppState: ObservableObject {
         ("Italiano", "it"), ("हिन्दी Hindi", "hi"), ("العربية Arabic", "ar"),
     ]
 
+    /// Model picker choices: display name → WhisperKit model id. Smaller = faster,
+    /// larger = more accurate. Turbo is the balanced default from PLAN.md.
+    static let models: [(name: String, id: String)] = [
+        ("Turbo — large-v3 (most accurate)", "large-v3-v20240930_626MB"),
+        ("Small (faster)", "small"),
+        ("Base (fast)", "base"),
+        ("Tiny (fastest)", "tiny"),
+    ]
+
     @Published var status: Status = .loadingModel
     @Published var cleanupEnabled: Bool {
         didSet { UserDefaults.standard.set(cleanupEnabled, forKey: "cleanupEnabled") }
@@ -60,14 +78,25 @@ final class AppState: ObservableObject {
     @Published var languageCode: String {
         didSet { UserDefaults.standard.set(languageCode, forKey: "languageCode") }
     }
+    @Published var modelName: String {
+        // didSet does NOT fire for the assignment in init(), so this only
+        // triggers a reload when the user changes the picker.
+        didSet {
+            guard modelName != oldValue else { return }
+            UserDefaults.standard.set(modelName, forKey: "modelName")
+            reloadModel()
+        }
+    }
 
     private let recorder = AudioRecorder()
     private let transcriber = Transcriber()
     private let overlay = RecordingOverlay()
+    private var recordingMode: RecordingMode = .pushToTalk
 
     init() {
         cleanupEnabled = UserDefaults.standard.bool(forKey: "cleanupEnabled")
         languageCode = UserDefaults.standard.string(forKey: "languageCode") ?? "auto"
+        modelName = UserDefaults.standard.string(forKey: "modelName") ?? Transcriber.defaultModel
         recorder.onLevel = { [weak self] level in
             self?.overlay.setLevel(level)
         }
@@ -84,27 +113,65 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            try await transcriber.load()
+            try await transcriber.load(modelName)
             status = .idle
         } catch {
             status = .error("Model load failed: \(error.localizedDescription)")
         }
     }
 
-    private func registerHotkey() {
-        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
-            self?.startRecording()
-        }
-        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
-            self?.stopAndTranscribe()
+    private func reloadModel() {
+        log.notice("reloading model: \(self.modelName)")
+        status = .loadingModel
+        Task {
+            do {
+                try await transcriber.load(modelName)
+                status = .idle
+            } catch {
+                log.error("model reload failed: \(error.localizedDescription)")
+                status = .error("Model load failed: \(error.localizedDescription)")
+            }
         }
     }
 
-    private func startRecording() {
-        log.notice("keyDown: status=\(String(describing: self.status))")
+    private func registerHotkey() {
+        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
+            self?.startRecording(mode: .pushToTalk)
+        }
+        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
+            self?.pushToTalkKeyUp()
+        }
+        KeyboardShortcuts.onKeyDown(for: .toggleDictation) { [weak self] in
+            self?.toggleDictation()
+        }
+    }
+
+    /// Push-to-talk release: only stops a recording that push-to-talk started.
+    private func pushToTalkKeyUp() {
+        guard status == .recording, recordingMode == .pushToTalk else {
+            log.notice("PTT keyUp ignored: status=\(String(describing: self.status))")
+            return
+        }
+        stopAndTranscribe()
+    }
+
+    /// Hands-free: tap to start, tap again to stop. Ignored while busy.
+    private func toggleDictation() {
+        if status == .idle {
+            startRecording(mode: .toggle)
+        } else if status == .recording, recordingMode == .toggle {
+            stopAndTranscribe()
+        } else {
+            log.notice("toggle ignored: status=\(String(describing: self.status))")
+        }
+    }
+
+    private func startRecording(mode: RecordingMode) {
+        log.notice("startRecording mode=\(String(describing: mode)) status=\(String(describing: self.status))")
         guard status == .idle else { return } // ignore key-repeat and busy states
         do {
             try recorder.start()
+            recordingMode = mode
             status = .recording
             overlay.show(.listening)
         } catch {
