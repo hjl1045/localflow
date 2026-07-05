@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// Floating indicator at the bottom-center of the screen: a row of dots that
-/// bounce with your voice while listening, and ripple left-to-right while
-/// transcribing. Non-activating and click-through, so it never steals focus
-/// from the app you're dictating into.
+/// Floating pill at the bottom-center of the screen: a flowing waveform that
+/// reacts to your voice while listening, and idles gently while transcribing.
+/// Non-activating and click-through, so it never steals focus from the app
+/// you're dictating into.
 @MainActor
 final class RecordingOverlay: ObservableObject {
     enum Mode {
@@ -16,7 +16,7 @@ final class RecordingOverlay: ObservableObject {
     @Published var level: Float = 0
 
     private var panel: NSPanel?
-    private static let size = CGSize(width: 132, height: 52)
+    private static let size = CGSize(width: 180, height: 40)
 
     /// Called from AudioRecorder with each buffer's RMS level (0…1).
     func setLevel(_ newLevel: Float) {
@@ -80,24 +80,26 @@ final class RecordingOverlay: ObservableObject {
 struct RecordingOverlayView: View {
     @ObservedObject var overlay: RecordingOverlay
 
-    private let dotCount = 5
-    private let dotSize: CGFloat = 9
-    private let dotSpacing: CGFloat = 11
-    private let maxHop: CGFloat = 18
+    private let barCount = 24
+    private let barWidth: CGFloat = 3
+    private let barSpacing: CGFloat = 3
+    private let minBarHeight: CGFloat = 4
+    private let maxBarHeight: CGFloat = 24
+
+    /// Soft light-yellow bars (was white).
+    private let barColor = Color(red: 1.0, green: 0.93, blue: 0.5)
 
     var body: some View {
         TimelineView(.animation) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            HStack(spacing: dotSpacing) {
-                ForEach(0..<dotCount, id: \.self) { index in
-                    Circle()
-                        .fill(.white.opacity(0.95))
-                        .frame(width: dotSize, height: dotSize)
-                        .offset(y: dotOffset(index: index, time: time))
+            HStack(spacing: barSpacing) {
+                ForEach(0..<barCount, id: \.self) { index in
+                    Capsule()
+                        .fill(barColor.opacity(0.95))
+                        .frame(width: barWidth, height: barHeight(index: index, time: time))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 11)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(
             Capsule()
@@ -107,23 +109,19 @@ struct RecordingOverlayView: View {
         .padding(4)
     }
 
-    /// Listening: staggered hops whose height follows the live mic level —
-    /// the louder you speak, the higher the dots jump. Processing: a single
-    /// gentle bump travelling left → right, like a loading ripple.
-    private func dotOffset(index: Int, time: TimeInterval) -> CGFloat {
+    /// A travelling sine wave gives the "flowing" motion; while listening its
+    /// amplitude is driven by the live mic level, while processing it idles.
+    private func barHeight(index: Int, time: TimeInterval) -> CGFloat {
+        let phase = Double(index) * 0.55
+        let wave = (sin(time * 7 + phase) + 1) / 2 // 0…1, flowing left→right
+
+        let amplitude: CGFloat
         switch overlay.mode {
         case .listening:
-            let phase = Double(index) * 0.45
-            let hop = abs(sin(time * 5.5 + phase)) // 0…1 bounce
-            let height = 2 + maxHop * CGFloat(min(overlay.level, 1))
-            return -height * CGFloat(hop)
+            amplitude = 0.15 + CGFloat(min(overlay.level, 1)) * 0.85
         case .processing:
-            // Ripple position sweeps across the row (with a little run-off
-            // on both ends so the wave enters and exits smoothly).
-            let sweep = (time * 1.4).truncatingRemainder(dividingBy: 1)
-            let position = sweep * Double(dotCount + 2) - 1
-            let lift = max(0, 1 - abs(Double(index) - position) / 1.3)
-            return -9 * CGFloat(lift)
+            amplitude = 0.3
         }
+        return minBarHeight + (maxBarHeight - minBarHeight) * amplitude * CGFloat(wave)
     }
 }
