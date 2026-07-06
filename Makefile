@@ -3,6 +3,7 @@ CONFIG  := release
 BUILD   := .build/$(CONFIG)
 BUNDLE  := dist/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
+VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
 
 # Prefer a stable Apple Development identity so the code signature (and the
 # TCC Accessibility grant tied to it) survives rebuilds; fall back to ad-hoc.
@@ -11,7 +12,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install clean
+.PHONY: build bundle run install zip clean
 
 build:
 	swift build -c $(CONFIG)
@@ -43,6 +44,14 @@ install: bundle
 	cp -R $(BUNDLE) /Applications/$(APP).app
 	@echo "Installed /Applications/$(APP).app — launch it from Spotlight or Launchpad."
 	open /Applications/$(APP).app
+
+# Zip the built .app for a GitHub Release. `ditto` preserves the bundle layout
+# and code signature (plain `zip` can corrupt them). Consumed by the Homebrew
+# cask — see docs/DISTRIBUTION.md.
+zip: bundle
+	ditto -c -k --keepParent $(BUNDLE) dist/$(APP)-$(VERSION).zip
+	@echo "Wrote dist/$(APP)-$(VERSION).zip"
+	@shasum -a 256 dist/$(APP)-$(VERSION).zip
 
 clean:
 	rm -rf .build dist
