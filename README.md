@@ -54,16 +54,17 @@ Headless pipeline test (no mic/UI):
 
 ## Moving it to another Mac
 
-Two options:
+Both machines must be **Apple Silicon** (WhisperKit runs on the Neural Engine).
 
-**A — build from source (recommended):**
+**A — build from source (recommended).** A locally built app isn't quarantined, so there's no Gatekeeper "unidentified developer" prompt and no signing to manage — it signs with whatever identity that Mac has (or ad-hoc).
 ```sh
-git clone <this repo>   # or AirDrop/rsync the folder
-cd wisperflow-clone && make run
+xcode-select --install                            # once, if you don't have build tools
+git clone https://github.com/hjl1045/localflow    # private repo — that Mac needs GitHub access (e.g. `gh auth login`)
+cd localflow && make install                      # builds, installs to /Applications, launches it
 ```
-The Whisper model auto-downloads on first run. For AI cleanup: `brew install ollama && ollama pull gemma3:4b`.
+Then grant **Microphone + Accessibility** when prompted. The Whisper model auto-downloads on first run (~626 MB, needs internet once). For optional AI cleanup: `brew install ollama && ollama pull gemma3:4b`.
 
-**B — copy the built app:** copy `dist/LocalFlow.app` (AirDrop, scp, USB). It's arm64-only and ad-hoc signed, so macOS will quarantine it; clear it with:
+**B — copy the built app.** Copy `dist/LocalFlow.app` (AirDrop, scp, USB). It's arm64-only and signed with a personal/dev identity (not notarized), so macOS quarantines a copied build; clear it with:
 ```sh
 xattr -dr com.apple.quarantine LocalFlow.app
 ```
