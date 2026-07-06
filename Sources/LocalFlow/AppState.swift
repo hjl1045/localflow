@@ -13,6 +13,21 @@ extension KeyboardShortcuts.Name {
     static let toggleDictation = Self("toggleDictation", default: .init(.d, modifiers: [.command, .option]))
 }
 
+/// A recent dictation kept in memory (this session only) so the text is
+/// recoverable from the menu if a paste missed its target.
+struct Transcript: Identifiable {
+    let id = UUID()
+    let text: String
+    let date = Date()
+
+    /// Single-line, clipped preview for the menu.
+    var preview: String {
+        let oneLine = text.replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return oneLine.count > 44 ? String(oneLine.prefix(44)) + "…" : oneLine
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     enum Status: Equatable {
@@ -100,6 +115,9 @@ final class AppState: ObservableObject {
             if status == .idle { overlay.preview() }
         }
     }
+    /// Last few dictations (newest first), in memory only — a safety net if a
+    /// paste missed its target. Cleared when the app quits.
+    @Published var recentTranscripts: [Transcript] = []
 
     private let recorder = AudioRecorder()
     private let transcriber = Transcriber()
@@ -147,6 +165,23 @@ final class AppState: ObservableObject {
                 status = .error("Model load failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Keep the newest 5 dictations in memory for the menu's Recent list.
+    private func addToHistory(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        recentTranscripts.insert(Transcript(text: trimmed), at: 0)
+        if recentTranscripts.count > 5 {
+            recentTranscripts.removeLast(recentTranscripts.count - 5)
+        }
+    }
+
+    /// Put a past transcript back on the clipboard so the user can paste it.
+    func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     private func registerHotkey() {
@@ -232,6 +267,9 @@ final class AppState: ObservableObject {
                         log.warning("cleanup unavailable, using raw transcript")
                     }
                 }
+                // Save before injecting, so it's recoverable even if the paste
+                // misses (window switched, focus lost, Accessibility hiccup).
+                addToHistory(text)
                 if TextInjector.inject(text) {
                     status = .idle
                 } else {

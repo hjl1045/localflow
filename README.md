@@ -46,6 +46,8 @@ Grant when prompted (System Settings → Privacy & Security):
 
 Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortcuts, pick a language (default: auto-detect) or model, move the **listening bar** to any edge/corner, toggle AI cleanup, or enable **Launch at login**.
 
+Menu bar icon → **Recent transcripts** keeps the last 5 dictations (in memory, this session only); click one to copy it to the clipboard — a safety net if a paste missed its target.
+
 Headless pipeline test (no mic/UI):
 
 ```sh

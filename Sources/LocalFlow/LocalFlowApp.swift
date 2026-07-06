@@ -136,6 +136,19 @@ struct MenuContent: View {
         if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleDictation) {
             Text("Tap \(shortcut.description) for hands-free")
         }
+        if !appState.recentTranscripts.isEmpty {
+            Divider()
+            Menu("Recent transcripts") {
+                ForEach(appState.recentTranscripts) { transcript in
+                    Button(menuLabel(transcript)) {
+                        appState.copyToClipboard(transcript.text)
+                    }
+                }
+                Divider()
+                Button("Clear recent") { appState.recentTranscripts.removeAll() }
+            }
+        }
+        Divider()
         // A plain SettingsLink opens the window but, in an LSUIElement app, it
         // stays unfocused so the shortcut recorder can't capture keys. The app
         // delegate promotes us to a regular app while Settings is open.
@@ -147,6 +160,17 @@ struct MenuContent: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private func menuLabel(_ transcript: Transcript) -> String {
+        "\(transcript.preview)  ·  \(ago(transcript.date))"
+    }
+
+    private func ago(_ date: Date) -> String {
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 { return "\(seconds)s ago" }
+        if seconds < 3600 { return "\(seconds / 60)m ago" }
+        return "\(seconds / 3600)h ago"
     }
 }
 
