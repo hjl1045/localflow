@@ -87,4 +87,4 @@ then launch and grant permissions. The model still auto-downloads on first run (
 | `TextInjector.swift` | clipboard-preserving paste-at-cursor |
 | `RecordingOverlay.swift` | floating waveform pill (non-activating panel) |
 | `LoginItem.swift` | launch-at-login toggle via `SMAppService` |
-| `LocalFlowApp.swift` | menu bar UI, Settings, activation-policy flip for a focusable Settings window, headless test CLI |
+| `LocalFlowApp.swift` | menu bar UI, AppKit-hosted Settings window (key/focusable in an accessory app), headless test CLI |

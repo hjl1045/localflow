@@ -72,6 +72,10 @@ final class AppState: ObservableObject {
     ]
 
     @Published var status: Status = .loadingModel
+    /// Bumped when the user records a new shortcut so the menu bar's
+    /// "Hold X to dictate" labels re-render with the current keys (they're
+    /// otherwise built once and never re-read `KeyboardShortcuts.getShortcut`).
+    @Published var shortcutsRevision = 0
     @Published var cleanupEnabled: Bool {
         didSet { UserDefaults.standard.set(cleanupEnabled, forKey: "cleanupEnabled") }
     }

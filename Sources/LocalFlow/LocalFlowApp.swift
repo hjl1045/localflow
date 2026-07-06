@@ -49,13 +49,25 @@ enum Main {
     }
 }
 
-/// In an `LSUIElement` (`.accessory`) app the Settings window never becomes
-/// truly *key*, so `KeyboardShortcuts.Recorder` silently swallows keypresses
-/// (you can't change the shortcut) and pickers are flaky. We briefly promote
-/// the app to `.regular` while Settings is open — the window then becomes key
-/// and the recorder works — and drop back to `.accessory` when it closes, so
-/// there's no lingering Dock icon.
+/// Settings for a menu-bar (`.accessory`) app.
+///
+/// SwiftUI's `Settings` scene is unusable here: in an accessory app its window
+/// never enters `NSApp.windows` controllably and never becomes *key*, so every
+/// control renders disabled (grayed) and `KeyboardShortcuts.Recorder` can't
+/// capture keys. Instead we host `SettingsView` in a plain AppKit `NSWindow` we
+/// own outright — it's a normal titled window that becomes key and enables its
+/// fields. While it's open we promote the app to `.regular` (a focusable window
+/// with a transient Dock icon), reverting to `.accessory` when it closes.
+///
+/// `showSettings` is **static on purpose:** SwiftUI's
+/// `@NSApplicationDelegateAdaptor` installs its *own* object as `NSApp.delegate`
+/// that merely forwards to this instance, so `NSApp.delegate as? AppDelegate`
+/// fails and can't reach an instance method. A static entry point, called
+/// straight from the menu button, sidesteps that.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let settingsTitle = "LocalFlow Settings"
+    private static var settingsWindow: NSWindow?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NotificationCenter.default.addObserver(
             self,
@@ -65,36 +77,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    /// Open Settings and make it interactive. Called from the menu.
     @MainActor
-    func showSettings() {
+    static func showSettings(appState: AppState) {
         NSApp.setActivationPolicy(.regular)
+
+        let window: NSWindow
+        if let existing = settingsWindow {
+            window = existing
+        } else {
+            let hosting = NSHostingController(rootView: SettingsView().environmentObject(appState))
+            window = NSWindow(contentViewController: hosting)
+            window.title = settingsTitle
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false // reuse it across opens
+            window.center()
+            settingsWindow = window
+        }
+
         NSApp.activate(ignoringOtherApps: true)
-        // Ventura+ selector; fall back to the pre-Ventura name just in case.
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+        window.makeKeyAndOrderFront(nil)
     }
 
+    /// Drop the transient Dock icon again once the settings window closes.
     @objc private func windowWillClose(_ note: Notification) {
-        guard let closing = note.object as? NSWindow, isSettingsWindow(closing) else { return }
-        // Recount once the window is actually gone; revert to accessory when no
-        // Settings window remains, dropping the transient Dock icon.
-        DispatchQueue.main.async {
-            let stillOpen = NSApp.windows.contains {
-                $0 !== closing && self.isSettingsWindow($0) && $0.isVisible
-            }
-            if !stillOpen {
-                NSApp.setActivationPolicy(.accessory)
-            }
-        }
-    }
-
-    /// The Settings window is a normal titled window; the recording overlay is a
-    /// borderless `NSPanel` and the menu-bar extra has no standard window, so
-    /// neither of those trips the policy flip.
-    private func isSettingsWindow(_ window: NSWindow) -> Bool {
-        !(window is NSPanel) && window.styleMask.contains(.titled)
+        guard let closing = note.object as? NSWindow, closing.title == Self.settingsTitle else { return }
+        DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
     }
 }
 
@@ -110,11 +117,6 @@ struct LocalFlowApp: App {
             Image(systemName: appState.status.symbolName)
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            SettingsView()
-                .environmentObject(appState)
-        }
     }
 }
 
@@ -138,7 +140,7 @@ struct MenuContent: View {
         // stays unfocused so the shortcut recorder can't capture keys. The app
         // delegate promotes us to a regular app while Settings is open.
         Button("Settings…") {
-            (NSApp.delegate as? AppDelegate)?.showSettings()
+            AppDelegate.showSettings(appState: appState)
         }
         Divider()
         Button("Quit LocalFlow") {
@@ -154,8 +156,12 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            KeyboardShortcuts.Recorder("Push-to-talk (hold):", name: .pushToTalk)
-            KeyboardShortcuts.Recorder("Hands-free (tap on/off):", name: .toggleDictation)
+            KeyboardShortcuts.Recorder("Push-to-talk (hold):", name: .pushToTalk) { _ in
+                appState.shortcutsRevision += 1
+            }
+            KeyboardShortcuts.Recorder("Hands-free (tap on/off):", name: .toggleDictation) { _ in
+                appState.shortcutsRevision += 1
+            }
             Picker("Language:", selection: $appState.languageCode) {
                 ForEach(AppState.languages, id: \.code) { language in
                     Text(language.name).tag(language.code)
