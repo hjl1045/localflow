@@ -72,6 +72,8 @@ xattr -dr com.apple.quarantine LocalFlow.app
 ```
 then launch and grant permissions. The model still auto-downloads on first run (~626 MB per machine).
 
+For the full distribution guide — including publishing via a **Homebrew cask** (own-tap recipe, notarization, prerequisites) — see [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md).
+
 ## Architecture
 
 ```
