@@ -4,7 +4,7 @@ A fully-local Wispr Flow–style dictation app for Apple Silicon Macs. Hold a ke
 
 - **ASR:** [WhisperKit](https://github.com/argmaxinc/WhisperKit) running Whisper **large-v3-turbo** (compressed, ~626 MB) on the Apple Neural Engine. Multilingual (~100 languages), auto-detect or pinned via Settings.
 - **AI cleanup (optional):** a local [Ollama](https://ollama.com) model (`gemma3:4b`) fixes punctuation, removes filler words and false starts — mirroring Wispr Flow's "Smart Formatting"/"Backtrack", but on-device.
-- **UX:** global push-to-talk hotkey (default **⌥ Option+Space**, configurable), floating waveform pill (warm-yellow reactive wave while listening, cool shimmer-sweep while transcribing; position configurable — any screen edge/corner, vertical on the sides), menu-bar status icon.
+- **UX:** global push-to-talk hotkey (default **⌥ Option+Space**, configurable), floating waveform pill (warm-yellow reactive wave while listening — flows left→right; cool white dots + a small spinner while transcribing; position configurable — any screen edge/corner, vertical on the sides), menu-bar status icon.
 
 See [PLAN.md](PLAN.md) for the research this design is based on.
 

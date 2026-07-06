@@ -168,15 +168,17 @@ struct RecordingOverlayView: View {
     private let barSpacing: CGFloat = 3
     private let minBar: CGFloat = 4
     private let maxBar: CGFloat = 24
+    private let dotCount = 5
+    private let dotSize: CGFloat = 4
 
-    /// Warm yellow while listening; cool blue-white while transcribing.
+    /// Warm yellow while listening; cool white while transcribing.
     private let listenColor = Color(red: 1.0, green: 0.93, blue: 0.5)
-    private let workColor = Color(red: 0.82, green: 0.95, blue: 1.0)
+    private let workColor = Color(red: 0.85, green: 0.95, blue: 1.0)
 
     var body: some View {
         TimelineView(.animation) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            bars(time: time)
+            content(time: time)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(
@@ -187,47 +189,97 @@ struct RecordingOverlayView: View {
         .padding(4)
     }
 
-    /// Horizontal (bars vary in height) or vertical (bars vary in width) so the
-    /// same waveform reads correctly on a top/bottom edge or a left/right edge.
     @ViewBuilder
-    private func bars(time: TimeInterval) -> some View {
+    private func content(time: TimeInterval) -> some View {
+        switch overlay.mode {
+        case .listening: waveform(time: time)
+        case .processing: transcribing(time: time)
+        }
+    }
+
+    /// Listening: warm mic-reactive wave. Horizontal (bars vary in height) or
+    /// vertical (bars vary in width); the wave flows left→right (top→bottom when
+    /// vertical).
+    @ViewBuilder
+    private func waveform(time: TimeInterval) -> some View {
         if overlay.position.isVertical {
             VStack(spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { barView(index: $0, time: time, vertical: true) }
+                ForEach(0..<barCount, id: \.self) { index in
+                    Capsule().fill(listenColor.opacity(0.95))
+                        .frame(width: barLength(index, time), height: barWidth)
+                }
             }
         } else {
             HStack(spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { barView(index: $0, time: time, vertical: false) }
+                ForEach(0..<barCount, id: \.self) { index in
+                    Capsule().fill(listenColor.opacity(0.95))
+                        .frame(width: barWidth, height: barLength(index, time))
+                }
+            }
+        }
+    }
+
+    /// Bar length (height when horizontal, width when vertical). The travelling
+    /// sine wave advances with index so the crest moves left→right; amplitude
+    /// tracks the live mic level.
+    private func barLength(_ index: Int, _ time: TimeInterval) -> CGFloat {
+        let phase = Double(index) * 0.55
+        let wave = (sin(phase - time * 7) + 1) / 2
+        let amplitude = 0.15 + CGFloat(min(overlay.level, 1)) * 0.85
+        return minBar + (maxBar - minBar) * amplitude * CGFloat(wave)
+    }
+
+    /// Transcribing: a quiet line of white dots with a glow travelling through
+    /// them (same left→right sense as the wave) and a small spinning "clock" at
+    /// the trailing end — a calm, unmistakable "working" state.
+    @ViewBuilder
+    private func transcribing(time: TimeInterval) -> some View {
+        if overlay.position.isVertical {
+            VStack(spacing: 6) {
+                dots(time: time, vertical: true)
+                spinner(time: time)
+            }
+        } else {
+            HStack(spacing: 7) {
+                dots(time: time, vertical: false)
+                spinner(time: time)
             }
         }
     }
 
     @ViewBuilder
-    private func barView(index: Int, time: TimeInterval, vertical: Bool) -> some View {
-        let bar = metrics(index: index, time: time)
-        Capsule()
-            .fill((overlay.mode == .listening ? listenColor : workColor).opacity(bar.brightness))
-            .frame(width: vertical ? bar.extent : barWidth,
-                   height: vertical ? barWidth : bar.extent)
+    private func dots(time: TimeInterval, vertical: Bool) -> some View {
+        if vertical {
+            VStack(spacing: 5) {
+                ForEach(0..<dotCount, id: \.self) { dot(index: $0, time: time) }
+            }
+        } else {
+            HStack(spacing: 5) {
+                ForEach(0..<dotCount, id: \.self) { dot(index: $0, time: time) }
+            }
+        }
     }
 
-    /// Per-bar (extent, brightness). **Listening:** a mic-reactive flowing wave
-    /// in warm yellow. **Transcribing:** uniform low cool bars with a bright
-    /// bump sweeping across — a "working" shimmer, unmistakably different from
-    /// listening so you can tell stop registered and it's still transcribing.
-    private func metrics(index: Int, time: TimeInterval) -> (extent: CGFloat, brightness: Double) {
-        switch overlay.mode {
-        case .listening:
-            let phase = Double(index) * 0.55
-            let wave = (sin(time * 7 + phase) + 1) / 2 // 0…1, flowing along the pill
-            let amplitude = 0.15 + CGFloat(min(overlay.level, 1)) * 0.85
-            return (minBar + (maxBar - minBar) * amplitude * CGFloat(wave), 0.95)
-        case .processing:
-            let period = 1.1 // seconds per sweep
-            let sweep = (time.truncatingRemainder(dividingBy: period) / period) * Double(barCount)
-            let intensity = max(0, 1 - abs(Double(index) - sweep) / 2.2) // bump ~2 bars wide
-            let extent = minBar + (maxBar - minBar) * (0.22 + 0.65 * CGFloat(intensity))
-            return (extent, 0.4 + 0.6 * intensity)
-        }
+    private func dot(index: Int, time: TimeInterval) -> some View {
+        Circle()
+            .fill(workColor.opacity(dotOpacity(index, time)))
+            .frame(width: dotSize, height: dotSize)
+    }
+
+    /// A soft glow travels through the dots left→right.
+    private func dotOpacity(_ index: Int, _ time: TimeInterval) -> Double {
+        let period = 1.3
+        let pos = (time.truncatingRemainder(dividingBy: period) / period) * Double(dotCount)
+        let glow = max(0, 1 - abs(Double(index) - pos) / 1.6)
+        return 0.25 + 0.7 * glow
+    }
+
+    /// Small rotating arc — the "clock" that shows it's still working.
+    private func spinner(time: TimeInterval) -> some View {
+        Circle()
+            .trim(from: 0, to: 0.72)
+            .stroke(workColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .frame(width: 13, height: 13)
+            .rotationEffect(.degrees((time * 220).truncatingRemainder(dividingBy: 360)))
     }
 }
