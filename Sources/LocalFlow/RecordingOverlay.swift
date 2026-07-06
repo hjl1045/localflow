@@ -169,8 +169,9 @@ struct RecordingOverlayView: View {
     private let minBar: CGFloat = 4
     private let maxBar: CGFloat = 24
 
-    /// Soft light-yellow bars.
-    private let barColor = Color(red: 1.0, green: 0.93, blue: 0.5)
+    /// Warm yellow while listening; cool blue-white while transcribing.
+    private let listenColor = Color(red: 1.0, green: 0.93, blue: 0.5)
+    private let workColor = Color(red: 0.82, green: 0.95, blue: 1.0)
 
     var body: some View {
         TimelineView(.animation) { timeline in
@@ -192,37 +193,41 @@ struct RecordingOverlayView: View {
     private func bars(time: TimeInterval) -> some View {
         if overlay.position.isVertical {
             VStack(spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    Capsule()
-                        .fill(barColor.opacity(0.95))
-                        .frame(width: barExtent(index: index, time: time), height: barWidth)
-                }
+                ForEach(0..<barCount, id: \.self) { barView(index: $0, time: time, vertical: true) }
             }
         } else {
             HStack(spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    Capsule()
-                        .fill(barColor.opacity(0.95))
-                        .frame(width: barWidth, height: barExtent(index: index, time: time))
-                }
+                ForEach(0..<barCount, id: \.self) { barView(index: $0, time: time, vertical: false) }
             }
         }
     }
 
-    /// How far a bar extends (height when horizontal, width when vertical). A
-    /// travelling sine wave gives the "flowing" motion; while listening its
-    /// amplitude is driven by the live mic level, while processing it idles.
-    private func barExtent(index: Int, time: TimeInterval) -> CGFloat {
-        let phase = Double(index) * 0.55
-        let wave = (sin(time * 7 + phase) + 1) / 2 // 0…1, flowing along the pill
+    @ViewBuilder
+    private func barView(index: Int, time: TimeInterval, vertical: Bool) -> some View {
+        let bar = metrics(index: index, time: time)
+        Capsule()
+            .fill((overlay.mode == .listening ? listenColor : workColor).opacity(bar.brightness))
+            .frame(width: vertical ? bar.extent : barWidth,
+                   height: vertical ? barWidth : bar.extent)
+    }
 
-        let amplitude: CGFloat
+    /// Per-bar (extent, brightness). **Listening:** a mic-reactive flowing wave
+    /// in warm yellow. **Transcribing:** uniform low cool bars with a bright
+    /// bump sweeping across — a "working" shimmer, unmistakably different from
+    /// listening so you can tell stop registered and it's still transcribing.
+    private func metrics(index: Int, time: TimeInterval) -> (extent: CGFloat, brightness: Double) {
         switch overlay.mode {
         case .listening:
-            amplitude = 0.15 + CGFloat(min(overlay.level, 1)) * 0.85
+            let phase = Double(index) * 0.55
+            let wave = (sin(time * 7 + phase) + 1) / 2 // 0…1, flowing along the pill
+            let amplitude = 0.15 + CGFloat(min(overlay.level, 1)) * 0.85
+            return (minBar + (maxBar - minBar) * amplitude * CGFloat(wave), 0.95)
         case .processing:
-            amplitude = 0.3
+            let period = 1.1 // seconds per sweep
+            let sweep = (time.truncatingRemainder(dividingBy: period) / period) * Double(barCount)
+            let intensity = max(0, 1 - abs(Double(index) - sweep) / 2.2) // bump ~2 bars wide
+            let extent = minBar + (maxBar - minBar) * (0.22 + 0.65 * CGFloat(intensity))
+            return (extent, 0.4 + 0.6 * intensity)
         }
-        return minBar + (maxBar - minBar) * amplitude * CGFloat(wave)
     }
 }
