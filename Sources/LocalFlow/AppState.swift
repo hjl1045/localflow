@@ -91,6 +91,15 @@ final class AppState: ObservableObject {
             reloadModel()
         }
     }
+    @Published var overlayPosition: OverlayPosition {
+        didSet {
+            UserDefaults.standard.set(overlayPosition.rawValue, forKey: "overlayPosition")
+            overlay.position = overlayPosition
+            // Flash the pill at the new spot so the user can see it (it
+            // otherwise only appears while dictating). Skip mid-session.
+            if status == .idle { overlay.preview() }
+        }
+    }
 
     private let recorder = AudioRecorder()
     private let transcriber = Transcriber()
@@ -101,6 +110,8 @@ final class AppState: ObservableObject {
         cleanupEnabled = UserDefaults.standard.bool(forKey: "cleanupEnabled")
         languageCode = UserDefaults.standard.string(forKey: "languageCode") ?? "auto"
         modelName = UserDefaults.standard.string(forKey: "modelName") ?? Transcriber.defaultModel
+        overlayPosition = OverlayPosition(rawValue: UserDefaults.standard.string(forKey: "overlayPosition") ?? "") ?? .bottomCenter
+        overlay.position = overlayPosition
         recorder.onLevel = { [weak self] level in
             self?.overlay.setLevel(level)
         }

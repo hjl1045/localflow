@@ -4,7 +4,7 @@ A fully-local Wispr Flow–style dictation app for Apple Silicon Macs. Hold a ke
 
 - **ASR:** [WhisperKit](https://github.com/argmaxinc/WhisperKit) running Whisper **large-v3-turbo** (compressed, ~626 MB) on the Apple Neural Engine. Multilingual (~100 languages), auto-detect or pinned via Settings.
 - **AI cleanup (optional):** a local [Ollama](https://ollama.com) model (`gemma3:4b`) fixes punctuation, removes filler words and false starts — mirroring Wispr Flow's "Smart Formatting"/"Backtrack", but on-device.
-- **UX:** global push-to-talk hotkey (default **⌥ Option+Space**, configurable), floating waveform pill at the bottom of the screen while listening, menu-bar status icon.
+- **UX:** global push-to-talk hotkey (default **⌥ Option+Space**, configurable), floating waveform pill while listening (position configurable — any screen edge/corner, vertical on the sides), menu-bar status icon.
 
 See [PLAN.md](PLAN.md) for the research this design is based on.
 
@@ -44,7 +44,7 @@ Grant when prompted (System Settings → Privacy & Security):
 2. Hold **⌥ Option+Space**, speak, release.
 3. The waveform pill shows it's listening; text lands at your cursor.
 
-Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortcuts, pick a language (default: auto-detect) or model, toggle AI cleanup, or enable **Launch at login**.
+Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortcuts, pick a language (default: auto-detect) or model, move the **listening bar** to any edge/corner, toggle AI cleanup, or enable **Launch at login**.
 
 Headless pipeline test (no mic/UI):
 
@@ -86,6 +86,6 @@ then launch and grant permissions. The model still auto-downloads on first run (
 | `Transcriber.swift` | WhisperKit wrapper, language/decoding options |
 | `OllamaCleaner.swift` | local LLM formatting pass (never blocks dictation) |
 | `TextInjector.swift` | clipboard-preserving paste-at-cursor |
-| `RecordingOverlay.swift` | floating waveform pill (non-activating panel) |
+| `RecordingOverlay.swift` | floating waveform pill (non-activating panel); configurable position, vertical on side edges |
 | `LoginItem.swift` | launch-at-login toggle via `SMAppService` |
 | `LocalFlowApp.swift` | menu bar UI, AppKit-hosted Settings window (key/focusable in an accessory app), headless test CLI |

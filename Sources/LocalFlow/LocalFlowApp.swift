@@ -172,6 +172,11 @@ struct SettingsView: View {
                     Text(model.name).tag(model.id)
                 }
             }
+            Picker("Listening bar:", selection: $appState.overlayPosition) {
+                ForEach(OverlayPosition.allCases) { pos in
+                    Text(pos.displayName).tag(pos)
+                }
+            }
             Toggle("Clean up transcript with Ollama (\(OllamaCleaner.model))", isOn: $appState.cleanupEnabled)
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
