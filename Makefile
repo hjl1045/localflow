@@ -39,14 +39,18 @@ run: bundle
 
 # Install into /Applications so Spotlight, Launchpad, and Finder can launch it
 # like any app. Quit any running copy first so it can be replaced, then relaunch.
-install: bundle
+install: bundle check-updates-app
 	-pkill -x $(APP)
 	rm -rf /Applications/$(APP).app
 	cp -R $(BUNDLE) /Applications/$(APP).app
+	@# The companion goes to /Applications too — built-but-not-installed means
+	@# it may as well not exist (it sat unfound in dist/ once already).
+	rm -rf "/Applications/Check Model Updates.app"
+	cp -R "$(CHECKAPP)" "/Applications/Check Model Updates.app"
 	@# LaunchServices needs a beat to register the replaced bundle; without
 	@# this, `open` right after the copy fails with -600.
 	@sleep 2
-	@echo "Installed /Applications/$(APP).app — launch it from Spotlight or Launchpad."
+	@echo "Installed /Applications/$(APP).app and 'Check Model Updates.app' — both in Spotlight/Launchpad."
 	open /Applications/$(APP).app
 
 # Zip the built .app for a GitHub Release. `ditto` preserves the bundle layout
