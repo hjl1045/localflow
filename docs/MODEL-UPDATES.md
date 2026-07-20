@@ -34,6 +34,22 @@ python3 scripts/check-updates.py --accept
 
 `scripts/model-snapshot.json` is the committed baseline of what's been seen.
 
+### The clickable version
+
+There's deliberately **no schedule** — the check runs when you decide to run it:
+
+```sh
+make check-updates-app     # builds "dist/Check Model Updates.app"
+```
+
+Drag it to the Dock. Clicking it opens a Terminal with the report and waits for
+a keypress before closing. `scripts/check-updates-run.command` is the same thing
+without the icon, double-clickable from Finder.
+
+The launcher has the repo path baked in at build time — **re-run
+`make check-updates-app` if the repo ever moves**, or the app will tell you it
+can't find its runner.
+
 ## `make bench`
 
 Runs every candidate model over `bench/samples/` and reports error rate,

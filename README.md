@@ -59,9 +59,10 @@ Headless pipeline test (no mic/UI):
 ## Keeping models current
 
 ```sh
-make check-updates   # did anything upstream change? (deps, CoreML models, Ollama)
-make bench-init      # synthesize a starter benchmark corpus (once)
-make bench           # is a model actually better? WER/CER + latency + RAM
+make check-updates       # did anything upstream change? (deps, CoreML models, Ollama)
+make check-updates-app   # ^ the same check as a Dock icon you click when you feel like it
+make bench-init          # synthesize a starter benchmark corpus (once)
+make bench               # is a model actually better? WER/CER + latency + RAM
 ```
 
 `check-updates` is the monthly mechanical check; `bench` is what decides whether to switch, measured on your own audio. Newer ≠ better. Full process, current measurements, and which alternative engines are worth watching: [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).

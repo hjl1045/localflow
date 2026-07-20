@@ -2,6 +2,7 @@ APP     := LocalFlow
 CONFIG  := release
 BUILD   := .build/$(CONFIG)
 BUNDLE  := dist/$(APP).app
+CHECKAPP := dist/Check Model Updates.app
 CONTENTS := $(BUNDLE)/Contents
 VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
 
@@ -12,7 +13,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install zip bench bench-init check-updates clean
+.PHONY: build bundle run install zip bench bench-init check-updates check-updates-app clean
 
 build:
 	swift build -c $(CONFIG)
@@ -70,6 +71,26 @@ bench: bundle
 # this reports something new. See docs/MODEL-UPDATES.md.
 check-updates:
 	python3 scripts/check-updates.py
+
+# The same check as a double-clickable app (Dock/Spotlight), for running it by
+# hand instead of on a schedule. The launcher shells back to this repo, so
+# re-run this target if the repo ever moves.
+check-updates-app: Support/CheckUpdatesIcon.icns
+	rm -rf "$(CHECKAPP)"
+	mkdir -p "$(CHECKAPP)/Contents/MacOS" "$(CHECKAPP)/Contents/Resources"
+	sed 's|@REPO@|$(CURDIR)|' Support/check-updates-launcher.sh > "$(CHECKAPP)/Contents/MacOS/CheckModelUpdates"
+	chmod +x "$(CHECKAPP)/Contents/MacOS/CheckModelUpdates" scripts/check-updates-run.command
+	cp Support/CheckUpdates-Info.plist "$(CHECKAPP)/Contents/Info.plist"
+	cp Support/CheckUpdatesIcon.icns "$(CHECKAPP)/Contents/Resources/CheckUpdatesIcon.icns"
+	printf 'APPL????' > "$(CHECKAPP)/Contents/PkgInfo"
+	codesign --force --sign "$(SIGN)" --identifier ai.xdlab.LocalFlow.CheckUpdates "$(CHECKAPP)"
+	@echo "Built $(CHECKAPP) — drag it to the Dock, or run: open '$(CHECKAPP)'"
+
+# Regenerated from an SF Symbol; committed so a normal build never needs Swift
+# to render an icon. Refresh ring = the check cycle, same family background as
+# the mic so the two read as siblings but not twins at Dock size.
+Support/CheckUpdatesIcon.icns:
+	./Support/make-icon.sh CheckUpdatesIcon arrow.triangle.2.circlepath
 
 clean:
 	rm -rf .build dist

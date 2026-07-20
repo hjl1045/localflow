@@ -1,12 +1,17 @@
 import AppKit
 
-// Renders LocalFlow's app icon: a white `mic.fill` SF Symbol on an indigo→violet
+// Renders LocalFlow's app icon: a white SF Symbol on an indigo→violet
 // rounded-rect, inset within the 1024px canvas the way macOS app icons are.
 // Writes a PNG to argv[1] (default icon-1024.png); make-icon.sh turns it into
-// the .iconset sizes and an .icns. Run via `swift make-icon.swift out.png`.
+// the .iconset sizes and an .icns. Run via `swift make-icon.swift out.png [symbol]`.
+//
+// The companion "Check Model Updates" launcher shares this background on
+// purpose — same family — and differs by glyph, so the two are told apart by
+// silhouette at Dock size: mic mass vs refresh ring.
 
 let canvas: CGFloat = 1024
 let inset: CGFloat = 100 // macOS icon art sits inside the canvas, not edge-to-edge
+let symbolName = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "mic.fill"
 
 let image = NSImage(size: NSSize(width: canvas, height: canvas))
 image.lockFocus()
@@ -22,7 +27,7 @@ let gradient = NSGradient(colors: [
 gradient.draw(in: bg, angle: -90)
 
 let config = NSImage.SymbolConfiguration(pointSize: bg.width * 0.52, weight: .regular)
-if let base = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil),
+if let base = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil),
    let mic = base.withSymbolConfiguration(config) {
     let s = mic.size
     // SF Symbols are template (black) images; tint to white via source-atop.
