@@ -10,6 +10,18 @@ enum Main {
     /// menu bar app.
     static func main() async {
         let args = CommandLine.arguments
+        // Same resolution + launch the "Check for updates…" menu item performs,
+        // reachable without clicking a menu — that's how it gets tested.
+        if args.contains("--check-updates") {
+            guard let url = UpdateCheck.companionURL() else {
+                print("FAILED: companion app not installed — run `make install`")
+                exit(1)
+            }
+            print("Companion app: \(url.path)")
+            await MainActor.run { UpdateCheck.launch() }
+            try? await Task.sleep(for: .seconds(2)) // let the launch complete
+            exit(0)
+        }
         if let flagIndex = args.firstIndex(of: "--transcribe"), args.count > flagIndex + 1 {
             var language: String?
             if let langIndex = args.firstIndex(of: "--language"), args.count > langIndex + 1 {
@@ -163,6 +175,11 @@ struct MenuContent: View {
         // delegate promotes us to a regular app while Settings is open.
         Button("Settings…") {
             AppDelegate.showSettings(appState: appState)
+        }
+        // Opens the companion app, which runs the model/dependency check in a
+        // Terminal window. Lives here because that's where you look for it.
+        Button("Check for updates…") {
+            UpdateCheck.launch()
         }
         Divider()
         Button("Quit LocalFlow") {

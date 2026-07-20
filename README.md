@@ -46,6 +46,8 @@ Grant when prompted (System Settings → Privacy & Security):
 
 Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortcuts, pick a language (default: auto-detect) or model, move the **listening bar** to any edge/corner, toggle AI cleanup, or enable **Launch at login**.
 
+Menu bar icon → **Check for updates…** runs the model/dependency check (below) in a Terminal window. The same check is a standalone app — *Check Model Updates*, installed to `/Applications` alongside LocalFlow — if you'd rather keep it in the Dock.
+
 Menu bar icon → **Recent transcripts** keeps the last 5 dictations (in memory, this session only); click one to copy it to the clipboard — a safety net if a paste missed its target.
 
 The AI-cleanup toggle needs Ollama running (`ollama serve`) with the model pulled. If it can't reach either, dictation still works — the raw transcript is used — and the menu bar and Settings say why instead of failing silently.

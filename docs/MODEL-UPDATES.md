@@ -41,17 +41,24 @@ python3 scripts/check-updates.py --accept
 
 `scripts/model-snapshot.json` is the committed baseline of what's been seen.
 
-### The clickable version
+### The clickable versions
 
-There's deliberately **no schedule** — the check runs when you decide to run it:
+There's deliberately **no schedule** — the check runs when you decide to run it,
+from either of two places:
 
-```sh
-make check-updates-app     # builds "dist/Check Model Updates.app"
-```
+- **LocalFlow's menu bar → "Check for updates…"** — where you'll instinctively
+  look for it.
+- **"Check Model Updates.app"** — a standalone app for the Dock. `make install`
+  installs it to `/Applications` alongside LocalFlow; `make check-updates-app`
+  builds it into `dist/` on its own.
 
-Drag it to the Dock. Clicking it opens a Terminal with the report and waits for
-a keypress before closing. `scripts/check-updates-run.command` is the same thing
-without the icon, double-clickable from Finder.
+Both open a Terminal with the report and wait for a keypress before closing.
+`scripts/check-updates-run.command` is the same thing without the icon,
+double-clickable from Finder.
+
+The menu item resolves the companion by bundle id, so it follows the app
+wherever it's installed — and falls back to the repo's `dist/` copy if the
+installed one is gone.
 
 The launcher has the repo path baked in at build time — **re-run
 `make check-updates-app` if the repo ever moves**, or the app will tell you it
