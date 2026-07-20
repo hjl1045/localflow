@@ -5,7 +5,7 @@
 Hold a key, speak, release — your words appear at the cursor, in whatever app you're using. Everything runs on your Mac: no cloud, no account, no API key. **Audio never leaves your machine.**
 
 ```
-⌥Space (hold) ──► speak ──► release ──► text lands where your cursor is
+⌃⌘M (hold) ──► speak ──► release ──► text lands where your cursor is
 ```
 
 ## Why
@@ -16,9 +16,9 @@ It's fast enough that this isn't a compromise: **a typical sentence transcribes 
 
 ## What it does
 
-- **Push-to-talk** — hold a hotkey (default <kbd>⌥</kbd><kbd>Space</kbd>), speak, release. Text is pasted at the cursor.
+- **Push-to-talk** — hold a hotkey, speak, release. Text is pasted at the cursor. Both hotkeys are recorded in Settings; pick combinations nothing else on your Mac has claimed.
 - **Hands-free mode** — tap a second hotkey to start, tap again to stop, for longer dictation.
-- **~100 languages** — auto-detected, or pin one in Settings. Handles mixed-language speech.
+- **Multilingual** — the language is auto-detected by default, or pin one of 12 in Settings (en, zh, es, fr, de, ja, ko, pt, ru, it, hi, ar). Mixed Chinese/English speech works well. The underlying Whisper model covers many more languages, but accuracy varies a lot between them and only English and Chinese are measured here — see [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).
 - **Optional AI cleanup** — a local LLM fixes punctuation, removes filler words ("um", "uh"), and resolves false starts. Also fully offline.
 - **Works everywhere** — any text field in any app: browser, editor, chat, terminal, Slack, notes.
 - **Menu-bar app** — no Dock icon, no window in your way. A floating waveform pill shows it's listening.
@@ -67,7 +67,7 @@ macOS will prompt for two, both required:
 ## Use it
 
 1. Click into any text field.
-2. Hold <kbd>⌥</kbd><kbd>Space</kbd>, speak, release.
+2. Hold <kbd>⌃</kbd><kbd>⌘</kbd><kbd>M</kbd> (the default — change it in Settings), speak, release.
 3. Your words appear at the cursor.
 
 Menu-bar icon → **Settings…** to change hotkeys, pick a language or model, move the waveform pill, enable AI cleanup, or launch at login.
@@ -100,8 +100,8 @@ Smaller, faster models (small / base / tiny) are selectable in Settings — they
 ## How it works
 
 ```
-⌥Space down ──► AVAudioEngine (16 kHz mono) ──► live level → waveform overlay
-⌥Space up   ──► WhisperKit large-v3-turbo (Neural Engine) ──► raw transcript
+hotkey down ──► AVAudioEngine (16 kHz mono) ──► live level → waveform overlay
+hotkey up   ──► WhisperKit large-v3-turbo (Neural Engine) ──► raw transcript
                     └─► [optional] Ollama cleanup ──► polished text
                               └─► clipboard save → paste ⌘V → clipboard restore
 ```

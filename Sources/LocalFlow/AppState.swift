@@ -8,9 +8,15 @@ private let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "pipeline")
 
 extension KeyboardShortcuts.Name {
     /// Hold to record, release to transcribe + inject.
-    static let pushToTalk = Self("pushToTalk", default: .init(.space, modifiers: [.option]))
+    ///
+    /// NOT ⌥Space, which reads like the natural choice: it's the factory default
+    /// of Alfred, Raycast and LaunchBar, so a new user's first press opens their
+    /// launcher instead of starting dictation — with no hint as to why. These
+    /// defaults are only a starting point anyway; both are re-recordable in
+    /// Settings, and an existing user's saved shortcut is unaffected.
+    static let pushToTalk = Self("pushToTalk", default: .init(.m, modifiers: [.control, .command]))
     /// Tap once to start hands-free recording, tap again to stop.
-    static let toggleDictation = Self("toggleDictation", default: .init(.d, modifiers: [.command, .option]))
+    static let toggleDictation = Self("toggleDictation", default: .init(.k, modifiers: [.shift, .command]))
 }
 
 /// A recent dictation kept in memory (this session only) so the text is
