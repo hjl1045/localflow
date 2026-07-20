@@ -65,6 +65,11 @@ SYNTH_SAMPLES = [
      "今天天气很好，我们下午去公园散步吧。"),
     ("zh-technical", "zh", "Tingting",
      "请把这个分支推送到远程仓库，然后创建一个合并请求。"),
+    # Code-switching is the actual dictation pattern here, and it's the hardest
+    # case: the model must not "helpfully" translate the English into Chinese,
+    # and must not drop out of Chinese entirely at the first Latin word.
+    ("zh-codeswitch", "zh", "Tingting",
+     "我今天 review 了那个 pull request，然后 merge 到 main branch 了。"),
 ]
 
 

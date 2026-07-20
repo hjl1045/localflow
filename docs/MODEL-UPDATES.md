@@ -115,11 +115,23 @@ make sense if first-load time on a cold app start becomes the complaint.
 
 Also worth recording, because it cost a round of debugging:
 
-- **large-v3-turbo already emits Simplified Chinese** when the language is
-  pinned to `zh`. Only `tiny` emits Traditional — a small-model artifact.
+- **large-v3-turbo emits Simplified Chinese on pure Chinese — but flips to
+  Traditional when the sentence code-switches into English.** Measured
+  2026-07-19: `zh-plain` and `zh-technical` score 0.0% CER in clean Simplified,
+  while `zh-codeswitch` ("我今天 review 了那个 pull request…") comes back with
+  那**個** / 然**後** at 4.8% CER — and every one of those errors is the script
+  flip, not a misheard word. `tiny` emits Traditional across the board.
+
+  This matters more than the raw number suggests: **code-switching is the actual
+  dictation pattern here**, so the script flip is a live problem, not a curiosity.
+  An earlier version of this doc claimed turbo "already emits Simplified" full
+  stop — that was measured only on pure-Chinese samples.
 - **Do not set `promptTokens` to bias the output script.** Conditioning the
   decoder with a Simplified-Chinese prompt made large-v3-turbo return an
-  **empty transcript**. It "fixed" a bug the default model never had.
+  **empty transcript**. Still a dead end — but note the problem it was aimed at
+  is real in the mixed case, so a *working* fix (post-conversion via an ICU
+  `Simplified-Traditional` transform in `Transcriber`, applied only for `zh`)
+  is worth trying if the flip becomes annoying.
 
 ## Engines worth watching
 
