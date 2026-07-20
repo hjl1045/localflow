@@ -5,7 +5,8 @@ import os
 
 /// Injects text at the cursor of the frontmost app via pasteboard-paste:
 /// save the user's clipboard → put our text on it → synthesize ⌘V → restore.
-/// This is the most reliable strategy across arbitrary macOS apps (PLAN.md).
+/// This is the most reliable strategy across arbitrary macOS apps: synthesizing
+/// per-character key events breaks on non-ASCII text and IME-driven input.
 enum TextInjector {
     private static let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "inject")
 

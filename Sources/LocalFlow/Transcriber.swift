@@ -5,7 +5,7 @@ import WhisperKit
 /// and serializes transcription requests.
 actor Transcriber {
     /// Compressed Whisper Large-v3-Turbo (~0.6 GB) — the balanced
-    /// latency/accuracy pick from PLAN.md. WhisperKit fuzzy-matches these
+    /// latency/accuracy pick (see docs/MODEL-UPDATES.md). WhisperKit fuzzy-matches these
     /// names against the argmaxinc/whisperkit-coreml model repo.
     static let defaultModel = "large-v3-v20240930_626MB"
 

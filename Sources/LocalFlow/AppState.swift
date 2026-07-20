@@ -78,7 +78,8 @@ final class AppState: ObservableObject {
     ]
 
     /// Model picker choices: display name → WhisperKit model id. Smaller = faster,
-    /// larger = more accurate. Turbo is the balanced default from PLAN.md.
+    /// larger = more accurate. Turbo is the balanced default — see
+    /// docs/MODEL-UPDATES.md for the measured error rates behind that choice.
     static let models: [(name: String, id: String)] = [
         ("Turbo — large-v3 (most accurate)", "large-v3-v20240930_626MB"),
         ("Small (faster)", "small"),
