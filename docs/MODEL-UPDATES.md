@@ -22,7 +22,14 @@ Checks, in one pass:
 | WhisperKit CoreML models | `argmaxinc/whisperkit-coreml` HF API | a new model just appears in the repo — no release, no notification |
 | Alternative ASR engines | watchlist in `scripts/check-updates.py` | see "Engines worth watching" below |
 | Ollama CLI | `brew info ollama` | — |
+| Ollama **server** | `/api/version` vs the CLI | `brew upgrade ollama` does **not** restart the running server — see below |
 | Ollama weights | local manifest digest vs registry | **a retagged model has the same name in `ollama list`** — only the digest reveals it |
+
+> **`brew upgrade ollama` doesn't finish the job.** The brew-services LaunchAgent
+> keeps the *old* server binary alive, so the CLI reports the new version while
+> `/api/version` still serves the old one and the upgrade silently hasn't taken.
+> Run `brew services restart ollama` after any upgrade. `check-updates` now flags
+> this mismatch as `server is STALE`. (Hit for real on 2026-07-19, 0.31.1 → 0.32.1.)
 
 New findings are marked `+`. Once triaged, re-run with `--accept` to snapshot
 the current state so the same items stop being reported:

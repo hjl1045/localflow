@@ -147,6 +147,21 @@ def check_ollama() -> None:
     except Exception:
         print(f"{BULLET} CLI {installed} (brew not available for comparison)")
 
+    # `brew upgrade ollama` does NOT restart the running server -- the
+    # LaunchAgent keeps serving the old binary, so the upgrade silently doesn't
+    # take. Only the server's own /api/version reveals it. (Hit 2026-07-19.)
+    try:
+        serving = http_json("http://127.0.0.1:11434/api/version").get("version", "?")
+    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError):
+        print(f"{BULLET} server not running -- cleanup is skipped until "
+              f"`brew services start ollama`")
+        return
+    if version_key(serving) < version_key(installed):
+        print(f"{NEW} server is STALE: serving {serving} while the CLI is "
+              f"{installed}  (brew services restart ollama)")
+    else:
+        print(f"{BULLET} server {serving} (matches CLI)")
+
     # Weights: compare the local manifest digest against the registry's. A
     # retagged model (same name, new weights) is invisible to `ollama list`.
     manifests = Path.home() / ".ollama/models/manifests/registry.ollama.ai/library"
