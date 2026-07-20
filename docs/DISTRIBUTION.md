@@ -36,34 +36,64 @@ A cask downloads a prebuilt artifact from a URL and drops the app in
 
 ### Prerequisites (important)
 
-- **A public download URL.** Homebrew can't authenticate to a *private* repo's
-  release assets. So the release `.zip` must be publicly downloadable — either
-  the repo is public, so release assets are directly downloadable.
-- **Notarization, for a clean install.** Without it, `brew install --cask`
-  works but macOS Gatekeeper blocks first launch (quarantine). Notarizing needs
-  a **paid Apple Developer account** ($99/yr): Developer ID signing →
-  `xcrun notarytool submit --wait` → `xcrun stapler staple`. Without it, users
-  must `xattr -dr com.apple.quarantine` once — fine for yourself, rough for a
-  public cask.
+- **A public download URL.** Homebrew can't authenticate to a private repo's
+  release assets. The repo is public, so release assets are directly
+  downloadable — no extra work.
 - **Apple Silicon only** — the cask should declare `depends_on arch: :arm64`.
+- **Notarization is the real blocker.** See the next section: without it, a cask
+  install is *worse* than building from source, and as of Homebrew 6 there is no
+  longer a supported flag to work around it.
 
-### Route A — your own tap (recommended for a personal app)
+### The quarantine problem — measured 2026-07-19, Homebrew 6.0.11
 
-You control it end-to-end; users don't need your main repo.
+Release artifacts here are **ad-hoc signed and not notarized** (deliberately —
+an Apple Development signature embeds the developer's email and Team ID in the
+binary, see the `zip` target in the Makefile). Gatekeeper therefore blocks the
+downloaded app on first launch.
 
-1. **Build a release artifact** and attach it to a GitHub Release:
+The advice you'll find everywhere is `brew install --cask --no-quarantine`.
+**That flag no longer exists:**
+
+```
+$ brew install --cask --no-quarantine localflow
+Error: invalid option: --no-quarantine
+```
+
+So a cask user must clear quarantine by hand after installing:
+
+```sh
+brew install --cask hjl1045/localflow/localflow
+xattr -dr com.apple.quarantine /Applications/LocalFlow.app
+```
+
+That is a strictly worse first-run experience than `make install` from source,
+which produces a locally built app that was never quarantined at all.
+
+**Recommendation: don't publish the cask yet.** It only becomes worth doing with
+notarization, which needs a paid Apple Developer account ($99/yr): Developer ID
+signing → `xcrun notarytool submit --wait` → `xcrun stapler staple`. Note that
+notarizing re-introduces the identity-in-binary tradeoff — a Developer ID
+signature also carries the team identity, which is unavoidable for a notarized
+public app.
+
+### Route A — your own tap (the path, when you do publish)
+
+You control it end-to-end; users don't need access to the main repo.
+
+1. **Cut a release** with the artifact attached:
    ```sh
-   make zip                       # -> dist/LocalFlow-<version>.zip (see Makefile target below)
+   make zip                       # -> dist/LocalFlow-<version>.zip, ad-hoc signed
    shasum -a 256 dist/LocalFlow-*.zip
-   gh release create v0.1.0 dist/LocalFlow-0.1.0.zip --title "v0.1.0" --notes "…"
+   gh release create v0.2.0 dist/LocalFlow-0.2.0.zip --title "LocalFlow v0.2.0" --notes "…"
    ```
-2. **Create a tap repo** named `homebrew-localflow` (the `homebrew-` prefix is
-   required) under your account: `hjl1045/homebrew-localflow`.
+   (For hjl1045 repos, prefix `gh` with `GH_TOKEN="$(gh auth token --user hjl1045)"`.)
+2. **Create a tap repo** named `homebrew-localflow` — the `homebrew-` prefix is
+   required: `hjl1045/homebrew-localflow`.
 3. Add `Casks/localflow.rb`:
    ```ruby
    cask "localflow" do
-     version "0.1.0"
-     sha256 "<sha256 of the zip>"
+     version "0.2.0"
+     sha256 "32f67a6a9be5b579ebb570f48a4e16eb2fb44fa624460a9ce0147715fc3a4132"
 
      url "https://github.com/hjl1045/localflow/releases/download/v#{version}/LocalFlow-#{version}.zip"
      name "LocalFlow"
@@ -75,17 +105,28 @@ You control it end-to-end; users don't need your main repo.
 
      app "LocalFlow.app"
 
+     caveats <<~EOS
+       LocalFlow is not notarized, so macOS blocks it on first launch:
+         xattr -dr com.apple.quarantine /Applications/LocalFlow.app
+       Then grant Microphone and Accessibility when prompted.
+     EOS
+
      zap trash: [
        "~/Library/Preferences/ai.xdlab.LocalFlow.plist",
      ]
    end
    ```
+   The `caveats` block is what makes this survivable — Homebrew prints it after
+   install, so the user is told about the quarantine step instead of hitting a
+   "damaged app" dialog with no explanation.
 4. **Install from the tap:**
    ```sh
    brew tap hjl1045/localflow
    brew install --cask localflow          # or: brew install --cask hjl1045/localflow/localflow
+   xattr -dr com.apple.quarantine /Applications/LocalFlow.app
    ```
-   Bump `version` + `sha256` and cut a new release for each update.
+5. **Each update:** `make zip`, cut the release, then bump `version` + `sha256`
+   in the cask. The sha256 must match the new artifact or installs fail.
 
 ### Route B — official homebrew-cask
 
