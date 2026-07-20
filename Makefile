@@ -56,9 +56,23 @@ install: bundle check-updates-app
 # Zip the built .app for a GitHub Release. `ditto` preserves the bundle layout
 # and code signature (plain `zip` can corrupt them). Consumed by the Homebrew
 # cask — see docs/DISTRIBUTION.md.
+#
+# The published artifact is re-signed AD-HOC in a staging copy, deliberately: an
+# Apple Development signature embeds the developer's email and Team ID, which
+# `codesign -dvvv` prints for anyone who downloads it. Local builds keep the
+# real identity (it's what keeps the TCC Accessibility grant stable across
+# rebuilds); only the thing strangers download is stripped.
 zip: bundle
-	ditto -c -k --keepParent $(BUNDLE) dist/$(APP)-$(VERSION).zip
-	@echo "Wrote dist/$(APP)-$(VERSION).zip"
+	rm -rf dist/release && mkdir -p dist/release
+	cp -R $(BUNDLE) dist/release/$(APP).app
+	codesign --force --deep --sign - --identifier ai.xdlab.LocalFlow dist/release/$(APP).app
+	@# Assert the positive condition — the artifact must be ad-hoc with no team.
+	@codesign -dvvv dist/release/$(APP).app 2>&1 | grep -q "Signature=adhoc" \
+		|| { echo "ERROR: release build is not ad-hoc signed — refusing to package"; exit 1; }
+	@codesign -dvvv dist/release/$(APP).app 2>&1 | grep -q "TeamIdentifier=not set" \
+		|| { echo "ERROR: release build carries a TeamIdentifier — refusing to package"; exit 1; }
+	ditto -c -k --keepParent dist/release/$(APP).app dist/$(APP)-$(VERSION).zip
+	@echo "Wrote dist/$(APP)-$(VERSION).zip (ad-hoc signed, no embedded identity)"
 	@shasum -a 256 dist/$(APP)-$(VERSION).zip
 
 # Which model is actually worth running: error rate vs latency vs RAM, measured
