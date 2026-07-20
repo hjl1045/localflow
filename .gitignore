@@ -6,3 +6,10 @@ bench/samples/
 .DS_Store
 *.xcodeproj
 .swiftpm/
+__pycache__/
+*.pyc
+# Personal working notes — kept locally, not part of the public repo
+docs/QUESTIONS.md
+docs/superpowers/
+# Competitor/design research — kept locally, not part of the public repo
+PLAN.md

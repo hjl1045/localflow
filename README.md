@@ -1,121 +1,138 @@
 # LocalFlow
 
-A fully-local Wispr Flow–style dictation app for Apple Silicon Macs. Hold a key, speak, release — your words are transcribed on-device and pasted at the cursor in whatever app is focused. No cloud, no accounts; audio never leaves your Mac.
+**English** · [中文](README.zh-CN.md)
 
-- **ASR:** [WhisperKit](https://github.com/argmaxinc/WhisperKit) running Whisper **large-v3-turbo** (compressed, ~626 MB) on the Apple Neural Engine. Multilingual (~100 languages), auto-detect or pinned via Settings.
-- **AI cleanup (optional):** a local [Ollama](https://ollama.com) model (`gemma3:4b`) fixes punctuation, removes filler words and false starts — mirroring Wispr Flow's "Smart Formatting"/"Backtrack", but on-device.
-- **UX:** global push-to-talk hotkey (default **⌥ Option+Space**, configurable), floating waveform pill (warm-yellow reactive wave while listening — flows left→right; cool white dots + a small spinner while transcribing; position configurable — any screen edge/corner, vertical on the sides), menu-bar status icon.
+Hold a key, speak, release — your words appear at the cursor, in whatever app you're using. Everything runs on your Mac: no cloud, no account, no API key. **Audio never leaves your machine.**
 
-See [PLAN.md](PLAN.md) for the research this design is based on.
+```
+⌥Space (hold) ──► speak ──► release ──► text lands where your cursor is
+```
+
+## Why
+
+Dictation is the fastest way to get words into a computer, but every good dictation tool ships your voice to someone's server. LocalFlow runs the whole pipeline on the Apple Neural Engine, so you can dictate a private message, a medical note, or an unreleased product spec without deciding whether you trust a vendor.
+
+It's fast enough that this isn't a compromise: **a typical sentence transcribes in about one second.**
+
+## What it does
+
+- **Push-to-talk** — hold a hotkey (default <kbd>⌥</kbd><kbd>Space</kbd>), speak, release. Text is pasted at the cursor.
+- **Hands-free mode** — tap a second hotkey to start, tap again to stop, for longer dictation.
+- **~100 languages** — auto-detected, or pin one in Settings. Handles mixed-language speech.
+- **Optional AI cleanup** — a local LLM fixes punctuation, removes filler words ("um", "uh"), and resolves false starts. Also fully offline.
+- **Works everywhere** — any text field in any app: browser, editor, chat, terminal, Slack, notes.
+- **Menu-bar app** — no Dock icon, no window in your way. A floating waveform pill shows it's listening.
+- **Recent transcripts** — the last 5 dictations are recoverable from the menu if a paste missed its target.
+
+## Typical uses
+
+| | |
+|---|---|
+| **Messages and email** | Speak a reply instead of typing it — the cleanup pass makes it punctuated prose, not a transcript. |
+| **Commit messages and code comments** | Dictating a *why* is faster than typing it, and technical vocabulary holds up well. |
+| **Notes and journaling** | Long-form thinking out loud, straight into whatever note app you already use. |
+| **Multilingual writing** | Speak in one language, or switch mid-sentence; the model follows. |
+| **Anywhere private** | Anything you wouldn't want to send to a third-party server. |
 
 ## Requirements
 
-- Apple Silicon Mac (M1 or later), macOS 14+
-- Xcode (or Command Line Tools with Swift 5.10+) — build only
-- [Ollama](https://ollama.com) + `ollama pull gemma3:4b` — only for the optional AI-cleanup toggle
+- **Apple Silicon Mac** (M1 or later) — the speech model runs on the Neural Engine
+- **macOS 14+**
+- **Xcode or Command Line Tools** (Swift 5.10+) — to build
+- *Optional:* [Ollama](https://ollama.com) + `ollama pull gemma3:4b` for the AI-cleanup toggle
 
-## Build & run
+## Install
+
+Build from source:
 
 ```sh
-make run        # builds, assembles dist/LocalFlow.app, launches from dist/ (dev loop)
-make install    # builds + installs to /Applications — launchable from Spotlight/Launchpad/Finder
+git clone https://github.com/hjl1045/localflow.git
+cd localflow
+make install
 ```
 
-`make install` is the "use it like a normal app" path: it copies `LocalFlow.app` into `/Applications` (quitting any running copy first) so Spotlight, Launchpad, and Finder can find and launch it. It has a proper app icon, and Settings has a **Launch at login** toggle so the hotkey is always live without relaunching.
+That builds the app, installs it to `/Applications`, and launches it. Look for the microphone icon in your menu bar.
 
-First launch downloads the Whisper model (~626 MB) and compiles it for the Neural Engine — the first transcription takes ~1 min extra, one time only. After that: ~2.7 s for 10 s of speech on an M4, +~1.3 s if AI cleanup is on.
-
-> LocalFlow is a menu-bar (accessory) app, so it has no permanent Dock icon. The Dock icon appears only briefly while the Settings window is open — that's what lets the shortcut recorder capture your keys (an accessory window otherwise can't become focused). The app icon (`Support/AppIcon.icns`) is regenerated from an SF Symbol via `Support/make-icon.sh` when the design changes.
+On first run, LocalFlow downloads the speech model (~626 MB) and compiles it for the Neural Engine. This takes about a minute, once.
 
 ### Permissions
 
-Grant when prompted (System Settings → Privacy & Security):
+macOS will prompt for two, both required:
 
 | Permission | Why |
 |---|---|
-| Microphone | record while you hold the key |
-| Accessibility | synthesize ⌘V to paste into the focused app |
+| **Microphone** | to record while you hold the key |
+| **Accessibility** | to paste the text into the app you're using |
 
-> Dev note: the app is ad-hoc signed, so after a rebuild macOS may require re-toggling the Accessibility grant.
+## Use it
 
-## Usage
+1. Click into any text field.
+2. Hold <kbd>⌥</kbd><kbd>Space</kbd>, speak, release.
+3. Your words appear at the cursor.
 
-1. Click into any text field, anywhere.
-2. Hold **⌥ Option+Space**, speak, release.
-3. The waveform pill shows it's listening; text lands at your cursor.
+Menu-bar icon → **Settings…** to change hotkeys, pick a language or model, move the waveform pill, enable AI cleanup, or launch at login.
 
-Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortcuts, pick a language (default: auto-detect) or model, move the **listening bar** to any edge/corner, toggle AI cleanup, or enable **Launch at login**.
+### AI cleanup (optional)
 
-Menu bar icon → **Check for updates…** runs the model/dependency check (below) in a Terminal window. The same check is a standalone app — *Check Model Updates*, installed to `/Applications` alongside LocalFlow — if you'd rather keep it in the Dock.
-
-Menu bar icon → **Recent transcripts** keeps the last 5 dictations (in memory, this session only); click one to copy it to the clipboard — a safety net if a paste missed its target.
-
-The AI-cleanup toggle needs Ollama running (`ollama serve`) with the model pulled. If it can't reach either, dictation still works — the raw transcript is used — and the menu bar and Settings say why instead of failing silently.
-
-Headless pipeline test (no mic/UI):
+Turn on *Clean up transcript with Ollama* in Settings, and a local LLM rewrites the raw transcript — punctuation, capitalization, filler removal, false starts resolved — before it's pasted. Needs Ollama running:
 
 ```sh
-./dist/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe test.wav [--language es] [--clean]
+brew install ollama && brew services start ollama
+ollama pull gemma3:4b
 ```
 
-## Keeping models current
+If Ollama isn't reachable, dictation still works; you get the raw transcript, and the menu bar tells you why cleanup was skipped.
 
-```sh
-make check-updates       # did anything upstream change? (deps, CoreML models, Ollama)
-make check-updates-app   # ^ the same check as a Dock icon you click when you feel like it
-make bench-init          # synthesize a starter benchmark corpus (once)
-make bench               # is a model actually better? WER/CER + latency + RAM
-```
+## Performance
 
-`check-updates` is the monthly mechanical check; `bench` is what decides whether to switch, measured on your own audio. Newer ≠ better. Full process, current measurements, and which alternative engines are worth watching: [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).
+Measured on an M-series Mac with the default model (Whisper large-v3-turbo, 626 MB compressed):
 
-## Moving it to another Mac
+| Utterance | Transcribe time |
+|---|---|
+| 3.5 s | 0.83 s |
+| 5.9 s | 1.06 s |
+| 13.1 s | 1.33 s |
 
-Both machines must be **Apple Silicon** (WhisperKit runs on the Neural Engine).
+Model load at app start: ~4 s (once per launch). AI cleanup adds a few seconds when enabled.
 
-**A — build from source (recommended).** A locally built app isn't quarantined, so there's no Gatekeeper "unidentified developer" prompt and no signing to manage — it signs with whatever identity that Mac has (or ad-hoc).
-```sh
-xcode-select --install                            # once, if you don't have build tools
-git clone https://github.com/hjl1045/localflow    # private repo — that Mac needs GitHub access (e.g. `gh auth login`)
-cd localflow && make install                      # builds, installs to /Applications, launches it
-```
-Then grant **Microphone + Accessibility** when prompted. The Whisper model auto-downloads on first run (~626 MB, needs internet once). For optional AI cleanup: `brew install ollama && ollama pull gemma3:4b`.
+Smaller, faster models (small / base / tiny) are selectable in Settings — they trade accuracy for speed. See [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) for measured error rates and how to benchmark models on your own voice.
 
-**B — copy the built app.** Copy `dist/LocalFlow.app` (AirDrop, scp, USB). It's arm64-only and signed with a personal/dev identity (not notarized), so macOS quarantines a copied build; clear it with:
-```sh
-xattr -dr com.apple.quarantine LocalFlow.app
-```
-then launch and grant permissions. The model still auto-downloads on first run (~626 MB per machine).
-
-For the full distribution guide — including publishing via a **Homebrew cask** (own-tap recipe, notarization, prerequisites) — see [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md).
-
-## Architecture
+## How it works
 
 ```
 ⌥Space down ──► AVAudioEngine (16 kHz mono) ──► live level → waveform overlay
-⌥Space up   ──► WhisperKit large-v3-turbo (ANE) ──► raw transcript
-                    └─► [optional] Ollama gemma3:4b cleanup ──► polished text
+⌥Space up   ──► WhisperKit large-v3-turbo (Neural Engine) ──► raw transcript
+                    └─► [optional] Ollama cleanup ──► polished text
                               └─► clipboard save → paste ⌘V → clipboard restore
 ```
 
 | File | Role |
 |---|---|
 | `AppState.swift` | state machine: hotkey → record → transcribe → clean → inject |
-| `AudioRecorder.swift` | mic capture, 16 kHz mono conversion, live RMS level |
-| `Transcriber.swift` | WhisperKit wrapper, language/decoding options |
+| `AudioRecorder.swift` | mic capture, 16 kHz mono conversion, live level |
+| `Transcriber.swift` | WhisperKit wrapper, language and decoding options |
 | `OllamaCleaner.swift` | local LLM formatting pass (never blocks dictation) |
 | `TextInjector.swift` | clipboard-preserving paste-at-cursor |
-| `RecordingOverlay.swift` | floating waveform pill (non-activating panel); configurable position, vertical on side edges |
-| `LoginItem.swift` | launch-at-login toggle via `SMAppService` |
-| `LocalFlowApp.swift` | menu bar UI, AppKit-hosted Settings window (key/focusable in an accessory app), headless test CLI |
-| `scripts/bench.py` | model benchmark: WER/CER + latency + RAM over `bench/samples/` |
-| `scripts/check-updates.py` | monthly upstream check: deps, CoreML models, Ollama + weights |
+| `RecordingOverlay.swift` | floating waveform pill |
+| `LocalFlowApp.swift` | menu-bar UI, Settings window, headless test CLI |
+
+Headless pipeline test, no mic or UI:
+
+```sh
+./dist/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe audio.wav [--language es] [--clean]
+```
 
 ## Docs
 
 | Doc | What it covers |
 |---|---|
-| [PLAN.md](PLAN.md) | the research this design is based on |
-| [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) | keeping models current: the check/bench split, current measurements, engines worth watching |
+| [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) | keeping models current, benchmarking on your own audio, measured results |
 | [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, Homebrew cask, notarization |
-| [docs/QUESTIONS.md](docs/QUESTIONS.md) | question log: what was asked → what it produced → where it lives |
+
+## Built on
+
+[WhisperKit](https://github.com/argmaxinc/WhisperKit) (Whisper on the Neural Engine) · [Whisper](https://github.com/openai/whisper) · [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) · [Ollama](https://ollama.com)
+
+## License
+
+[MIT](LICENSE)

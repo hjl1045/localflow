@@ -11,7 +11,7 @@ Silicon**.
 
 ```sh
 xcode-select --install                            # once, if no build tools
-git clone https://github.com/hjl1045/localflow    # private repo — that Mac needs GitHub access (gh auth login)
+git clone https://github.com/hjl1045/localflow.git
 cd localflow && make install                      # builds, installs to /Applications, launches it
 ```
 
@@ -38,7 +38,7 @@ A cask downloads a prebuilt artifact from a URL and drops the app in
 
 - **A public download URL.** Homebrew can't authenticate to a *private* repo's
   release assets. So the release `.zip` must be publicly downloadable — either
-  make `hjl1045/localflow` public, or host the artifact in a public repo/release.
+  the repo is public, so release assets are directly downloadable.
 - **Notarization, for a clean install.** Without it, `brew install --cask`
   works but macOS Gatekeeper blocks first launch (quarantine). Notarizing needs
   a **paid Apple Developer account** ($99/yr): Developer ID signing →
@@ -67,7 +67,7 @@ You control it end-to-end; users don't need your main repo.
 
      url "https://github.com/hjl1045/localflow/releases/download/v#{version}/LocalFlow-#{version}.zip"
      name "LocalFlow"
-     desc "Fully-local Wispr Flow-style dictation for Apple Silicon"
+     desc "Fully-local, on-device dictation for Apple Silicon"
      homepage "https://github.com/hjl1045/localflow"
 
      depends_on arch: :arm64

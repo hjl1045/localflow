@@ -1,9 +1,9 @@
 import Foundation
 
 /// Phase-2 "Smart Formatting" layer: sends the raw transcript to a local
-/// Ollama model for punctuation/filler cleanup. Mirrors Wispr Flow's design
-/// boundary — the LLM formats, it does NOT "correct" words it thinks were
-/// misheard (that's the ASR stage's job).
+/// Ollama model for punctuation/filler cleanup. The boundary is deliberate:
+/// the LLM formats, it does NOT "correct" words it thinks were misheard —
+/// that's the ASR stage's job, and an LLM guessing at them invents content.
 /// Why cleanup is (or isn't) available. Cleanup failing is *silent* by design —
 /// dictation must never block on the LLM — so the reason is surfaced in the
 /// menu bar and Settings instead of being swallowed.
