@@ -48,11 +48,23 @@ Menu bar icon → **Settings…** to change the push-to-talk / hands-free shortc
 
 Menu bar icon → **Recent transcripts** keeps the last 5 dictations (in memory, this session only); click one to copy it to the clipboard — a safety net if a paste missed its target.
 
+The AI-cleanup toggle needs Ollama running (`ollama serve`) with the model pulled. If it can't reach either, dictation still works — the raw transcript is used — and the menu bar and Settings say why instead of failing silently.
+
 Headless pipeline test (no mic/UI):
 
 ```sh
 ./dist/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe test.wav [--language es] [--clean]
 ```
+
+## Keeping models current
+
+```sh
+make check-updates   # did anything upstream change? (deps, CoreML models, Ollama)
+make bench-init      # synthesize a starter benchmark corpus (once)
+make bench           # is a model actually better? WER/CER + latency + RAM
+```
+
+`check-updates` is the monthly mechanical check; `bench` is what decides whether to switch, measured on your own audio. Newer ≠ better. Full process, current measurements, and which alternative engines are worth watching: [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).
 
 ## Moving it to another Mac
 
@@ -93,3 +105,14 @@ For the full distribution guide — including publishing via a **Homebrew cask**
 | `RecordingOverlay.swift` | floating waveform pill (non-activating panel); configurable position, vertical on side edges |
 | `LoginItem.swift` | launch-at-login toggle via `SMAppService` |
 | `LocalFlowApp.swift` | menu bar UI, AppKit-hosted Settings window (key/focusable in an accessory app), headless test CLI |
+| `scripts/bench.py` | model benchmark: WER/CER + latency + RAM over `bench/samples/` |
+| `scripts/check-updates.py` | monthly upstream check: deps, CoreML models, Ollama + weights |
+
+## Docs
+
+| Doc | What it covers |
+|---|---|
+| [PLAN.md](PLAN.md) | the research this design is based on |
+| [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) | keeping models current: the check/bench split, current measurements, engines worth watching |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, Homebrew cask, notarization |
+| [docs/QUESTIONS.md](docs/QUESTIONS.md) | question log: what was asked → what it produced → where it lives |

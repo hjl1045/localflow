@@ -92,8 +92,16 @@ final class AppState: ObservableObject {
     /// otherwise built once and never re-read `KeyboardShortcuts.getShortcut`).
     @Published var shortcutsRevision = 0
     @Published var cleanupEnabled: Bool {
-        didSet { UserDefaults.standard.set(cleanupEnabled, forKey: "cleanupEnabled") }
+        didSet {
+            UserDefaults.standard.set(cleanupEnabled, forKey: "cleanupEnabled")
+            // Re-check immediately so flipping the toggle on tells you right
+            // away if Ollama can't actually serve it.
+            if cleanupEnabled { refreshOllamaHealth() } else { ollamaHealth = .unknown }
+        }
     }
+    /// Whether the optional cleanup stage can actually run. Only meaningful
+    /// (and only surfaced) while `cleanupEnabled` is on.
+    @Published var ollamaHealth: OllamaHealth = .unknown
     @Published var languageCode: String {
         didSet { UserDefaults.standard.set(languageCode, forKey: "languageCode") }
     }
@@ -150,6 +158,18 @@ final class AppState: ObservableObject {
             status = .idle
         } catch {
             status = .error("Model load failed: \(error.localizedDescription)")
+        }
+        if cleanupEnabled { refreshOllamaHealth() }
+    }
+
+    /// Refreshes the cleanup-availability warning shown in the menu + Settings.
+    func refreshOllamaHealth() {
+        Task {
+            let health = await OllamaCleaner.probe()
+            if health != ollamaHealth {
+                log.notice("ollama health: \(String(describing: health))")
+            }
+            ollamaHealth = health
         }
     }
 
@@ -262,9 +282,13 @@ final class AppState: ObservableObject {
                     status = .cleaning
                     if let cleaned = await OllamaCleaner.clean(text) {
                         text = cleaned
+                        ollamaHealth = .ok
                         log.notice("cleanup ok: \(text.count) chars")
                     } else {
+                        // Raw transcript still goes through — but find out WHY
+                        // so the menu can say so instead of failing silently.
                         log.warning("cleanup unavailable, using raw transcript")
+                        refreshOllamaHealth()
                     }
                 }
                 // Save before injecting, so it's recoverable even if the paste

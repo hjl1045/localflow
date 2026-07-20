@@ -12,7 +12,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install zip clean
+.PHONY: build bundle run install zip bench bench-init check-updates clean
 
 build:
 	swift build -c $(CONFIG)
@@ -42,6 +42,9 @@ install: bundle
 	-pkill -x $(APP)
 	rm -rf /Applications/$(APP).app
 	cp -R $(BUNDLE) /Applications/$(APP).app
+	@# LaunchServices needs a beat to register the replaced bundle; without
+	@# this, `open` right after the copy fails with -600.
+	@sleep 2
 	@echo "Installed /Applications/$(APP).app — launch it from Spotlight or Launchpad."
 	open /Applications/$(APP).app
 
@@ -52,6 +55,21 @@ zip: bundle
 	ditto -c -k --keepParent $(BUNDLE) dist/$(APP)-$(VERSION).zip
 	@echo "Wrote dist/$(APP)-$(VERSION).zip"
 	@shasum -a 256 dist/$(APP)-$(VERSION).zip
+
+# Which model is actually worth running: error rate vs latency vs RAM, measured
+# on this machine with bench/samples/. `bench-init` synthesizes a starter set;
+# replace it with recordings of your own voice for numbers you can trust.
+bench-init:
+	python3 scripts/bench.py --generate
+
+bench: bundle
+	python3 scripts/bench.py --json reports/bench-$(shell date +%Y-%m-%d).json
+
+# Is anything upstream newer than what we pin/run? Deps, WhisperKit CoreML
+# models, Ollama + its model weights. Run monthly; re-run `make bench` only when
+# this reports something new. See docs/MODEL-UPDATES.md.
+check-updates:
+	python3 scripts/check-updates.py
 
 clean:
 	rm -rf .build dist

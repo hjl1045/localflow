@@ -4,9 +4,59 @@ import Foundation
 /// Ollama model for punctuation/filler cleanup. Mirrors Wispr Flow's design
 /// boundary — the LLM formats, it does NOT "correct" words it thinks were
 /// misheard (that's the ASR stage's job).
+/// Why cleanup is (or isn't) available. Cleanup failing is *silent* by design —
+/// dictation must never block on the LLM — so the reason is surfaced in the
+/// menu bar and Settings instead of being swallowed.
+enum OllamaHealth: Equatable {
+    case unknown
+    case ok
+    case notRunning
+    case modelMissing(String)
+
+    /// Menu/Settings warning, or nil when cleanup will actually run.
+    var warning: String? {
+        switch self {
+        case .unknown, .ok: nil
+        case .notRunning: "Ollama isn’t running — cleanup is being skipped"
+        case .modelMissing(let model): "Ollama is missing \(model) — cleanup is being skipped"
+        }
+    }
+
+    /// The one command that fixes it, shown under the warning.
+    var fixHint: String? {
+        switch self {
+        case .unknown, .ok: nil
+        case .notRunning: "Start it with:  ollama serve"
+        case .modelMissing(let model): "Install it with:  ollama pull \(model)"
+        }
+    }
+}
+
 enum OllamaCleaner {
     static let model = "gemma3:4b"
     private static let endpoint = URL(string: "http://127.0.0.1:11434/api/generate")!
+    private static let tagsEndpoint = URL(string: "http://127.0.0.1:11434/api/tags")!
+
+    /// Checks whether cleanup can actually run: is the server up, and is the
+    /// model pulled? Cheap (a local GET), so it's safe to call on launch, when
+    /// the toggle flips, and after any failed cleanup.
+    static func probe() async -> OllamaHealth {
+        var request = URLRequest(url: tagsEndpoint, timeoutInterval: 3)
+        request.httpMethod = "GET"
+        guard
+            let (data, response) = try? await URLSession.shared.data(for: request),
+            (response as? HTTPURLResponse)?.statusCode == 200,
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let models = json["models"] as? [[String: Any]]
+        else {
+            return .notRunning
+        }
+        // Ollama reports "gemma3:4b"; a bare "gemma3" pull registers as "gemma3:latest".
+        let names = models.compactMap { $0["name"] as? String }
+        let installed = names.contains(model)
+            || (model.hasSuffix(":latest") && names.contains(String(model.dropLast(7))))
+        return installed ? .ok : .modelMissing(model)
+    }
 
     private static let instructions = """
     You clean up raw speech-to-text dictation. Rewrite the transcript with:

@@ -36,7 +36,9 @@ enum Main {
                         text = cleaned
                         print(String(format: "Cleaned in %.2fs: %@", -cleanStart.timeIntervalSinceNow, text))
                     } else {
-                        print("Cleanup unavailable (is Ollama running?)")
+                        let health = await OllamaCleaner.probe()
+                        print("Cleanup unavailable: \(health.warning ?? "Ollama returned nothing usable")")
+                        if let hint = health.fixHint { print("  \(hint)") }
                     }
                 }
                 exit(0)
@@ -80,6 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     static func showSettings(appState: AppState) {
         NSApp.setActivationPolicy(.regular)
+        // Ollama may have been started (or stopped) since the last check.
+        if appState.cleanupEnabled { appState.refreshOllamaHealth() }
 
         let window: NSWindow
         if let existing = settingsWindow {
@@ -130,6 +134,11 @@ struct MenuContent: View {
         }
         Divider()
         Toggle("AI Cleanup (Ollama)", isOn: $appState.cleanupEnabled)
+        // The toggle can be ON while cleanup silently no-ops (server down, model
+        // not pulled). Say so here rather than letting it look like it's working.
+        if appState.cleanupEnabled, let warning = appState.ollamaHealth.warning {
+            Text("⚠︎ \(warning)")
+        }
         if let shortcut = KeyboardShortcuts.getShortcut(for: .pushToTalk) {
             Text("Hold \(shortcut.description) to dictate")
         }
@@ -202,6 +211,22 @@ struct SettingsView: View {
                 }
             }
             Toggle("Clean up transcript with Ollama (\(OllamaCleaner.model))", isOn: $appState.cleanupEnabled)
+            if appState.cleanupEnabled, let warning = appState.ollamaHealth.warning {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(warning)
+                        if let hint = appState.ollamaHealth.fixHint {
+                            Text(hint).font(.system(.caption, design: .monospaced))
+                        }
+                    }
+                    Spacer()
+                    Button("Re-check") { appState.refreshOllamaHealth() }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
                     LoginItem.setEnabled(newValue)
