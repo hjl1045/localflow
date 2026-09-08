@@ -4,6 +4,14 @@ BUILD   := .build/$(CONFIG)
 BUNDLE  := dist/$(APP).app
 CHECKAPP := dist/Check Model Updates.app
 USERAPPS := $(HOME)/Applications
+
+# Developer ID identity, used ONLY for notarized builds she installs herself.
+# Empty until the certificate exists — the notarize target checks and explains.
+DEVID := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/{print $$2; exit}')
+# Keychain profile created by `scripts/setup-notary.sh`.
+NOTARY_PROFILE ?= localflow-notary
+ENTITLEMENTS := Support/LocalFlow.entitlements
+NOTARIZED := dist/notarized/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
 VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
 
@@ -14,7 +22,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install install-user uninstall-user zip bench bench-init check-updates check-updates-app clean
+.PHONY: build bundle run install install-user uninstall-user notarize install-notarized zip bench bench-init check-updates check-updates-app clean
 
 build:
 	swift build -c $(CONFIG)
@@ -53,6 +61,64 @@ install: bundle check-updates-app
 	@sleep 2
 	@echo "Installed /Applications/$(APP).app and 'Check Model Updates.app' — both in Spotlight/Launchpad."
 	open /Applications/$(APP).app
+
+# Sign with Developer ID + hardened runtime, notarize, and staple the ticket.
+#
+# For builds SHE installs — a notarized app passes Gatekeeper anywhere, including
+# a managed Mac that refuses un-notarized software. Deliberately NOT wired into
+# `zip`: a Developer ID signature embeds the account identity in the binary, and
+# what strangers download stays ad-hoc. See docs/DISTRIBUTION.md.
+#
+# One-time setup: create the certificate (Xcode > Settings > Accounts > Manage
+# Certificates > + > Developer ID Application), then `bash scripts/setup-notary.sh`.
+notarize: bundle
+	@if [ -z "$(DEVID)" ]; then \
+		echo "ERROR: no 'Developer ID Application' certificate in the keychain."; \
+		echo "  Xcode > Settings > Accounts > (your team) > Manage Certificates > + >"; \
+		echo "  'Developer ID Application'. An 'Apple Development' cert cannot notarize."; \
+		exit 1; \
+	fi
+	@xcrun notarytool history --keychain-profile "$(NOTARY_PROFILE)" >/dev/null 2>&1 || { \
+		echo "ERROR: no notary credentials stored as '$(NOTARY_PROFILE)'."; \
+		echo "  Run: bash scripts/setup-notary.sh"; \
+		exit 1; \
+	}
+	rm -rf dist/notarized && mkdir -p dist/notarized
+	cp -R $(BUNDLE) $(NOTARIZED)
+	@# Sign inside-out. `--deep` is unsupported for notarization — Apple rejects
+	@# or silently mis-signs nested code — so nested bundles go first, app last.
+	@find $(NOTARIZED)/Contents/Resources -name '*.bundle' -print -exec \
+		codesign --force --options runtime --timestamp --sign "$(DEVID)" {} \;
+	codesign --force --options runtime --timestamp \
+		--entitlements $(ENTITLEMENTS) \
+		--sign "$(DEVID)" --identifier ai.xdlab.LocalFlow $(NOTARIZED)
+	@# Assert BEFORE spending a notary round-trip on a build that can't pass.
+	@codesign -dvvv $(NOTARIZED) 2>&1 | grep -q "flags=.*runtime" \
+		|| { echo "ERROR: hardened runtime missing — notarization would reject it"; exit 1; }
+	codesign --verify --strict --verbose=2 $(NOTARIZED)
+	ditto -c -k --keepParent $(NOTARIZED) dist/notarize-upload.zip
+	xcrun notarytool submit dist/notarize-upload.zip \
+		--keychain-profile "$(NOTARY_PROFILE)" --wait
+	xcrun stapler staple $(NOTARIZED)
+	@# The real test: Gatekeeper's own verdict on the stapled bundle.
+	spctl -a -vvv -t install $(NOTARIZED)
+	@rm -f dist/notarize-upload.zip
+	@echo "Notarized and stapled: $(NOTARIZED)"
+
+# Install the notarized build into ~/Applications (the managed-Mac path).
+#
+# NOTE: this changes the code signature, so macOS treats it as a different app —
+# the existing Microphone and Accessibility grants do NOT carry over. Remove
+# LocalFlow from both lists in System Settings > Privacy & Security and re-add it.
+install-notarized: notarize check-updates-app
+	-pkill -x $(APP)
+	mkdir -p "$(USERAPPS)"
+	rm -rf "$(USERAPPS)/$(APP).app"
+	cp -R $(NOTARIZED) "$(USERAPPS)/$(APP).app"
+	@sleep 2
+	@echo "Installed notarized $(USERAPPS)/$(APP).app"
+	@echo "Re-grant Microphone + Accessibility: the signature changed, so the old grants are void."
+	open "$(USERAPPS)/$(APP).app"
 
 # Install into ~/Applications instead of /Applications — for a managed Mac
 # where writing to the system-wide folder needs admin rights or trips endpoint
