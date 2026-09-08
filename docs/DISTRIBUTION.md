@@ -84,7 +84,7 @@ You control it end-to-end; users don't need access to the main repo.
    ```sh
    make zip                       # -> dist/LocalFlow-<version>.zip, ad-hoc signed
    shasum -a 256 dist/LocalFlow-*.zip
-   gh release create v0.2.0 dist/LocalFlow-0.2.0.zip --title "LocalFlow v0.2.0" --notes "…"
+   gh release create v0.2.1 dist/LocalFlow-0.2.1.zip --title "LocalFlow v0.2.1" --notes "…"
    ```
    (For hjl1045 repos, prefix `gh` with `GH_TOKEN="$(gh auth token --user hjl1045)"`.)
 2. **Create a tap repo** named `homebrew-localflow` — the `homebrew-` prefix is
@@ -92,8 +92,8 @@ You control it end-to-end; users don't need access to the main repo.
 3. Add `Casks/localflow.rb`:
    ```ruby
    cask "localflow" do
-     version "0.2.0"
-     sha256 "32f67a6a9be5b579ebb570f48a4e16eb2fb44fa624460a9ce0147715fc3a4132"
+     version "0.2.1"
+     sha256 "e10a99e0c907f4e97781d40b24bd4b8cdcbfcef59e7174bab16f06ceed2a186c"
 
      url "https://github.com/hjl1045/localflow/releases/download/v#{version}/LocalFlow-#{version}.zip"
      name "LocalFlow"
