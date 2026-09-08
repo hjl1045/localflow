@@ -55,7 +55,7 @@ one class of problem and no others.
 | Needs an admin password to install; IT watches writes to `/Applications` | **Yes** — nothing outside `$HOME` is written |
 | "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No** — that's Gatekeeper quarantine. Fix: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`. A locally built app is never quarantined, so `make install-user` from source avoids it entirely |
 | "cannot be opened because the developer cannot be verified" | **No** — the app is ad-hoc signed, not notarized. Same `xattr` fix, or build from source |
-| MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Needs IT to allow-list it, or a notarized build |
+| MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Use `make install-notarized` instead (§2c), or have IT allow-list it |
 | Microphone or Accessibility toggle won't stick, or the app isn't offered in System Settings | **No** — that's a managed **PPPC** profile. Only IT can grant it |
 
 So: if the blocker is *where the file goes*, this fixes it. If the blocker is
@@ -82,6 +82,71 @@ so on a machine that has ever had a `/Applications` copy it reports the same
 answer for both and can't distinguish them. On a machine with only the
 user-level install, flip the Settings toggle once and check that it survives a
 reboot.
+
+## 2c. Notarized builds — for your own machines only
+
+```sh
+bash scripts/setup-notary.sh     # once: checks the certificate, stores credentials
+make install-notarized           # sign with Developer ID + hardened runtime, notarize, staple, install
+```
+
+A notarized, stapled app passes Gatekeeper anywhere — including a managed Mac
+that refuses un-notarized software. This is the answer to the "MDM requires
+notarized apps" row in §2b, the one thing a location change can't fix.
+
+### Why this is NOT wired into `make zip`
+
+A **Developer ID** signature embeds the account identity in the binary, and
+`codesign -dvvv` prints it to anyone who downloads the app. That is exactly what
+the ad-hoc re-signing in the `zip` target exists to strip. So the two paths stay
+separate on purpose:
+
+| | signature | identity visible to a downloader |
+|---|---|---|
+| `make zip` → GitHub Release | ad-hoc | none |
+| `make install-notarized` → your own Mac | Developer ID + notarized | yes — but nothing is published |
+
+Anonymous distribution and frictionless install are mutually exclusive. This
+setup takes both, by never applying them to the same artifact.
+
+### One-time setup
+
+1. **The certificate** — Xcode > Settings… > Accounts > your team > Manage
+   Certificates… > **+** > **Developer ID Application**. An *Apple Development*
+   certificate cannot notarize; it's a different kind. Only the Admin or Account
+   Holder role on the team can issue one.
+2. **The credentials** — `bash scripts/setup-notary.sh`. It needs an
+   **app-specific password** (from account.apple.com > Sign-In and Security >
+   App-Specific Passwords), *not* the normal Apple ID password. Stored in the
+   keychain as `localflow-notary`; nothing lands in the repo.
+
+### What the target does, and why in that order
+
+- Signs **inside-out** — nested `.bundle` resources first, the app last.
+  `--deep` is unsupported for notarization; Apple's advice is to sign nested
+  code separately, which is why this doesn't reuse the `bundle` target's
+  signing step.
+- `--options runtime` (hardened runtime) and `--timestamp` are **required**;
+  notarization rejects builds without them.
+- `Support/LocalFlow.entitlements` grants
+  `com.apple.security.device.audio-input`. The hardened runtime blocks the
+  microphone unless the binary asks for it explicitly — without this the app
+  launches fine and then records silence, with no prompt.
+  `NSMicrophoneUsageDescription` is the reason string shown to the user; the
+  entitlement is the capability. Both are needed.
+- Asserts the hardened-runtime flag is present **before** submitting, so a build
+  that can't pass doesn't cost a notary round-trip.
+- Ends with `spctl -a -vvv -t install`, which is Gatekeeper's own verdict on the
+  stapled bundle — the only check that actually proves it will open.
+
+### ⚠️ The signature change voids your existing permissions
+
+macOS ties Microphone and Accessibility grants to the code signature. Switching
+from the Apple Development signature to Developer ID makes it a *different* app
+as far as TCC is concerned, so **both grants stop working**. Remove LocalFlow
+from System Settings > Privacy & Security > **Microphone** and > **Accessibility**
+with the − button, then re-add it. A stale entry can display as granted while
+the API still reports untrusted, so remove-then-re-add rather than toggling.
 
 ## 3. Publish via Homebrew (Cask)
 

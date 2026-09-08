@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Notarization requires the hardened runtime, and the hardened runtime
+	     blocks microphone access unless the binary asks for it explicitly.
+	     Without this entitlement a notarized LocalFlow launches fine and then
+	     records silence: the mic prompt never appears and AVCaptureDevice
+	     reports denied. NSMicrophoneUsageDescription in Info.plist is the
+	     user-facing reason string; this is the capability itself. Both needed. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>
