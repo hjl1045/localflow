@@ -12,7 +12,7 @@ Hold a key, speak, release — your words appear at the cursor, in whatever app 
 
 Dictation is the fastest way to get words into a computer, but every good dictation tool ships your voice to someone's server. LocalFlow runs the whole pipeline on the Apple Neural Engine, so you can dictate a private message, a medical note, or an unreleased product spec without deciding whether you trust a vendor.
 
-It's fast enough that this isn't a compromise: **a typical sentence transcribes in about one second.**
+It's fast enough to use all day — transcription starts the moment you release the key, with no upload and no round-trip.
 
 ## What it does
 
@@ -20,6 +20,7 @@ It's fast enough that this isn't a compromise: **a typical sentence transcribes 
 - **Hands-free mode** — tap a second hotkey to start, tap again to stop, for longer dictation.
 - **Multilingual** — the language is auto-detected by default, or pin one of 12 in Settings (en, zh, es, fr, de, ja, ko, pt, ru, it, hi, ar). Mixed Chinese/English speech works well. The underlying Whisper model covers many more languages, but accuracy varies a lot between them and only English and Chinese are measured here — see [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).
 - **Optional AI cleanup** — a local LLM fixes punctuation, removes filler words ("um", "uh"), and resolves false starts. Also fully offline.
+- **No stray placeholders** — Whisper narrates the non-speech it hears (`[BLANK_AUDIO]` for the beat of silence before you release the key, `*music*`, `[laughter]`). Those are the model's annotations, not your words, so they are stripped before anything reaches the cursor.
 - **Works everywhere** — any text field in any app: browser, editor, chat, terminal, Slack, notes.
 - **Menu-bar app** — no Dock icon, no window in your way. A floating waveform pill shows it's listening.
 - **Recent transcripts** — the last 5 dictations are recoverable from the menu if a paste missed its target.
@@ -85,7 +86,7 @@ If Ollama isn't reachable, dictation still works; you get the raw transcript, an
 
 ## Performance
 
-Measured on an M-series Mac with the default model (Whisper large-v3-turbo, 626 MB compressed):
+Measured on an M-series Mac with the default model (Whisper large-v3-turbo, 626 MB compressed), on the **synthesized** bench corpus — clean, evenly-paced speech. Real dictation is messier and slower, so treat these as a floor, not a promise:
 
 | Utterance | Transcribe time |
 |---|---|
