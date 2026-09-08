@@ -63,10 +63,13 @@ actor Transcriber {
         return options
     }
 
+    /// Both transcribe paths funnel through here, so the non-speech annotations
+    /// Whisper adds ([BLANK_AUDIO] for the silent tail of a push-to-talk take,
+    /// [MUSIC], laughter…) are stripped once, before any caller sees the text.
     private static func joinedText(_ results: [TranscriptionResult]) -> String {
-        results
+        let joined = results
             .map(\.text)
             .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return TranscriptSanitizer.clean(joined)
     }
 }
