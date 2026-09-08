@@ -54,6 +54,16 @@ make install
 
 这条命令会编译、安装到 `/Applications` 并启动它。装好后在菜单栏找那个麦克风图标。
 
+如果这台 Mac 不方便往 `/Applications` 写东西 —— 比如装了端点安全软件的公司电脑，或者你没有管理员权限 —— 可以改装到自己的用户目录：
+
+```sh
+make install-user
+```
+
+同一个 app、同一个签名、同样的权限，只是装在 `~/Applications`，不碰家目录以外的任何位置。LocalFlow 本来就没有 Dock 图标（是菜单栏应用），所以它已经是个后台服务了 —— 变的只是位置。`make uninstall-user` 可以卸掉。
+
+同一台机器只装其中一个，**不要两个都装**：两份相同 bundle id 的副本会让 macOS 分不清快捷键和登录项指的是哪一个。如果公司电脑还是拦，[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) 里写了换位置能解决什么、不能解决什么。
+
 首次运行时，LocalFlow 会下载语音模型（约 626 MB）并为神经网络引擎编译一次，大概需要一分钟，只有第一次。
 
 ### 权限

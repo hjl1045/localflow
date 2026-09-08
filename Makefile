@@ -3,6 +3,7 @@ CONFIG  := release
 BUILD   := .build/$(CONFIG)
 BUNDLE  := dist/$(APP).app
 CHECKAPP := dist/Check Model Updates.app
+USERAPPS := $(HOME)/Applications
 CONTENTS := $(BUNDLE)/Contents
 VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
 
@@ -13,7 +14,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install zip bench bench-init check-updates check-updates-app clean
+.PHONY: build bundle run install install-user uninstall-user zip bench bench-init check-updates check-updates-app clean
 
 build:
 	swift build -c $(CONFIG)
@@ -52,6 +53,37 @@ install: bundle check-updates-app
 	@sleep 2
 	@echo "Installed /Applications/$(APP).app and 'Check Model Updates.app' — both in Spotlight/Launchpad."
 	open /Applications/$(APP).app
+
+# Install into ~/Applications instead of /Applications — for a managed Mac
+# where writing to the system-wide folder needs admin rights or trips endpoint
+# security. It is the SAME bundle with the SAME signature: only the path
+# differs, so Microphone and Accessibility behave identically. Nothing is
+# written outside the home folder.
+#
+# Install ONE of these per machine. Two copies of the same bundle id confuse
+# LaunchServices about which one a hotkey or a login item refers to.
+install-user: bundle check-updates-app
+	-pkill -x $(APP)
+	@if [ -d "/Applications/$(APP).app" ]; then \
+		echo "WARNING: /Applications/$(APP).app also exists. Two copies of the same"; \
+		echo "         bundle id confuse LaunchServices and the TCC grants. Remove it:"; \
+		echo "           rm -rf /Applications/$(APP).app '/Applications/Check Model Updates.app'"; \
+	fi
+	mkdir -p "$(USERAPPS)"
+	rm -rf "$(USERAPPS)/$(APP).app"
+	cp -R $(BUNDLE) "$(USERAPPS)/$(APP).app"
+	rm -rf "$(USERAPPS)/Check Model Updates.app"
+	cp -R "$(CHECKAPP)" "$(USERAPPS)/Check Model Updates.app"
+	@# LaunchServices needs a beat to register the bundle before `open` works.
+	@sleep 2
+	@echo "Installed $(USERAPPS)/$(APP).app — nothing was written to /Applications."
+	open "$(USERAPPS)/$(APP).app"
+
+# Remove the user-level install (leaves any /Applications copy alone).
+uninstall-user:
+	-pkill -x $(APP)
+	rm -rf "$(USERAPPS)/$(APP).app" "$(USERAPPS)/Check Model Updates.app"
+	@echo "Removed $(APP) from $(USERAPPS)."
 
 # Zip the built .app for a GitHub Release. `ditto` preserves the bundle layout
 # and code signature (plain `zip` can corrupt them). Consumed by the Homebrew

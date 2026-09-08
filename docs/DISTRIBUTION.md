@@ -28,6 +28,61 @@ xattr -dr com.apple.quarantine LocalFlow.app   # it's not notarized
 open LocalFlow.app
 ```
 
+## 2b. Managed / work Macs — install without touching `/Applications`
+
+```sh
+make install-user      # -> ~/Applications/LocalFlow.app
+make uninstall-user
+```
+
+`LSUIElement` is already `true`, so LocalFlow has no Dock icon and is already a
+background menu-bar service. `install-user` changes **only where the bundle
+lives** — same binary, same signature, same bundle id, so Microphone and
+Accessibility behave the same. It needs no admin rights and writes nothing
+outside the home folder.
+
+Install one or the other per machine, never both: two copies sharing
+`ai.xdlab.LocalFlow` leave LaunchServices and TCC ambiguous about which bundle
+a hotkey or login item refers to.
+
+### What this fixes, and what it doesn't
+
+A location change is not a way around managed-Mac policy. It helps with exactly
+one class of problem and no others.
+
+| Symptom | Does `install-user` help? |
+|---|---|
+| Needs an admin password to install; IT watches writes to `/Applications` | **Yes** — nothing outside `$HOME` is written |
+| "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No** — that's Gatekeeper quarantine. Fix: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`. A locally built app is never quarantined, so `make install-user` from source avoids it entirely |
+| "cannot be opened because the developer cannot be verified" | **No** — the app is ad-hoc signed, not notarized. Same `xattr` fix, or build from source |
+| MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Needs IT to allow-list it, or a notarized build |
+| Microphone or Accessibility toggle won't stick, or the app isn't offered in System Settings | **No** — that's a managed **PPPC** profile. Only IT can grant it |
+
+So: if the blocker is *where the file goes*, this fixes it. If the blocker is
+*what the binary is signed with*, nothing local fixes it — that needs
+notarization (see §3) or an IT allow-list entry.
+
+### Diagnosing which one you're hitting
+
+The exact wording matters, and Console shows what the dialog hides:
+
+```sh
+xattr -p com.apple.quarantine /path/to/LocalFlow.app 2>/dev/null && echo "QUARANTINED"
+spctl -a -vvv /path/to/LocalFlow.app          # Gatekeeper's own verdict
+codesign -dvvv /path/to/LocalFlow.app 2>&1 | grep -E 'Signature|TeamIdentifier'
+log show --last 5m --predicate 'subsystem == "com.apple.TCC"' | grep -i localflow
+sudo profiles list                             # is the Mac MDM-managed at all?
+```
+
+### Known unverified
+
+Whether **launch at login** works from `~/Applications` has not been confirmed.
+`SMAppService.mainApp.status` is keyed to the *bundle identifier*, not the path,
+so on a machine that has ever had a `/Applications` copy it reports the same
+answer for both and can't distinguish them. On a machine with only the
+user-level install, flip the Settings toggle once and check that it survives a
+reboot.
+
 ## 3. Publish via Homebrew (Cask)
 
 Because it's a GUI `.app`, Homebrew distribution is a **Cask**, not a formula.

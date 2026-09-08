@@ -54,6 +54,16 @@ make install
 
 That builds the app, installs it to `/Applications`, and launches it. Look for the microphone icon in your menu bar.
 
+On a Mac where you'd rather not write to `/Applications` — a work machine with endpoint security, or one where you don't have admin rights — install into your home folder instead:
+
+```sh
+make install-user
+```
+
+Same app, same signature, same permissions. It lives in `~/Applications` and nothing outside your home folder is touched. LocalFlow has no Dock icon either way (it's a menu-bar app), so this is already a background service — only the location changes. `make uninstall-user` removes it.
+
+Install one or the other on a given machine, **not both**: two copies of the same bundle id leave macOS unsure which one your hotkey and login item refer to. If a managed Mac still blocks it, [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) covers what a location change can and can't fix.
+
 On first run, LocalFlow downloads the speech model (~626 MB) and compiles it for the Neural Engine. This takes about a minute, once.
 
 ### Permissions
