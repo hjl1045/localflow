@@ -1,5 +1,8 @@
 import Foundation
 import WhisperKit
+import os
+
+private let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "transcribe")
 
 /// Wraps WhisperKit. Loads the model once (auto-downloading it on first run)
 /// and serializes transcription requests.
@@ -27,17 +30,15 @@ actor Transcriber {
 
     /// Headless test path: transcribe an audio file directly.
     /// `language` is an ISO 639-1 code ("en", "es", …) or nil to auto-detect.
+    ///
+    /// Loads the file to samples and hands off to the array path rather than
+    /// calling WhisperKit's `audioPath:` overload — which does the same load
+    /// internally — so the headless path exercises *exactly* what the
+    /// microphone does, silence trimming included. A test path that skips a
+    /// stage can't verify it.
     func transcribe(path: String, language: String? = nil) async throws -> String {
-        guard let whisperKit else {
-            throw NSError(domain: "LocalFlow", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Model not loaded yet."
-            ])
-        }
-        let results = try await whisperKit.transcribe(
-            audioPath: path,
-            decodeOptions: Self.decodingOptions(language: language)
-        )
-        return Self.joinedText(results)
+        let samples = try AudioProcessor.loadAudioAsFloatArray(fromPath: path)
+        return try await transcribe(samples, language: language)
     }
 
     func transcribe(_ samples: [Float], language: String? = nil) async throws -> String {
@@ -46,8 +47,13 @@ actor Transcriber {
                 NSLocalizedDescriptionKey: "Model not loaded yet."
             ])
         }
+        let audio = SilenceTrimmer.trimTrailingSilence(samples)
+        if audio.count < samples.count {
+            let seconds = Double(samples.count - audio.count) / AudioRecorder.targetSampleRate
+            log.notice("trimmed \(seconds, format: .fixed(precision: 2))s of trailing silence")
+        }
         let results = try await whisperKit.transcribe(
-            audioArray: samples,
+            audioArray: audio,
             decodeOptions: Self.decodingOptions(language: language)
         )
         return Self.joinedText(results)

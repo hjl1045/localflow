@@ -20,7 +20,7 @@ It's fast enough to use all day — transcription starts the moment you release 
 - **Hands-free mode** — tap a second hotkey to start, tap again to stop, for longer dictation.
 - **Multilingual** — the language is auto-detected by default, or pin one of 12 in Settings (en, zh, es, fr, de, ja, ko, pt, ru, it, hi, ar). Mixed Chinese/English speech works well. The underlying Whisper model covers many more languages, but accuracy varies a lot between them and only English and Chinese are measured here — see [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).
 - **Optional AI cleanup** — a local LLM fixes punctuation, removes filler words ("um", "uh"), and resolves false starts. Also fully offline.
-- **No stray placeholders** — Whisper narrates the non-speech it hears (`[BLANK_AUDIO]` for the beat of silence before you release the key, `*music*`, `[laughter]`). Those are the model's annotations, not your words, so they are stripped before anything reaches the cursor.
+- **Nothing from the silence** — you stop talking a beat before you let go of the key, and Whisper narrates that gap: sometimes as an annotation (`[BLANK_AUDIO]`, `*music*`, `[laughter]`), sometimes as a word it invents outright (`Thank you.`). The trailing silence is trimmed off the audio before the model sees it, and any annotation that still gets through is stripped before the text reaches your cursor.
 - **Works everywhere** — any text field in any app: browser, editor, chat, terminal, Slack, notes.
 - **Menu-bar app** — no Dock icon, no window in your way. A floating waveform pill shows it's listening.
 - **Recent transcripts** — the last 5 dictations are recoverable from the menu if a paste missed its target.
