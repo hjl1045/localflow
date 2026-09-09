@@ -112,6 +112,13 @@ notarize: bundle
 # LocalFlow from both lists in System Settings > Privacy & Security and re-add it.
 install-notarized: notarize check-updates-app
 	-pkill -x $(APP)
+	@if [ -d "/Applications/$(APP).app" ]; then \
+		echo "WARNING: /Applications/$(APP).app also exists, signed with a DIFFERENT identity."; \
+		echo "         Two copies of the same bundle id make LaunchServices and TCC ambiguous —"; \
+		echo "         and you can end up granting Microphone/Accessibility to the wrong one."; \
+		echo "         Remove it BEFORE re-granting permissions:"; \
+		echo "           rm -rf /Applications/$(APP).app '/Applications/Check Model Updates.app'"; \
+	fi
 	mkdir -p "$(USERAPPS)"
 	rm -rf "$(USERAPPS)/$(APP).app"
 	cp -R $(NOTARIZED) "$(USERAPPS)/$(APP).app"
