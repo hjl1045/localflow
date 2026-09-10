@@ -139,6 +139,7 @@ Headless pipeline test, no mic or UI:
 |---|---|
 | [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) | keeping models current, benchmarking on your own audio, measured results |
 | [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, Homebrew cask, notarization |
+| [docs/FEEDBACK.md](docs/FEEDBACK.md) | reporting a bug or crash, where reports land, symbolicating a crash report |
 
 ## Built on
 

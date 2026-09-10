@@ -22,6 +22,32 @@ enum Main {
             try? await Task.sleep(for: .seconds(2)) // let the launch complete
             exit(0)
         }
+        // Prints the exact report the "Report an issue…" window would send, so
+        // the payload — and the mailto URL built from it — can be checked
+        // without a mail client or a click. `--diagnostics-mail` prints the
+        // trimmed email variant instead of the full text.
+        if args.contains("--diagnostics") || args.contains("--diagnostics-mail") {
+            let state = await MainActor.run { AppState(live: false) }
+            let crash = CrashReports.newestUnseen()
+            let report = await Diagnostics.collect(appState: state, crash: crash)
+            if args.contains("--diagnostics-mail") {
+                let body = Feedback.mailBody(for: report)
+                print("To: \(Feedback.intakeAddress)")
+                print("Subject: \(report.subject)")
+                print("Body bytes: \(body.count)")
+                if let url = Feedback.mailtoURL(for: report) {
+                    print("mailto URL length: \(url.absoluteString.count)")
+                } else {
+                    print("FAILED: could not build a mailto URL")
+                    exit(1)
+                }
+                print("---")
+                print(body)
+            } else {
+                print(report.fullText)
+            }
+            exit(0)
+        }
         if let flagIndex = args.firstIndex(of: "--transcribe"), args.count > flagIndex + 1 {
             var language: String?
             if let langIndex = args.firstIndex(of: "--language"), args.count > langIndex + 1 {
@@ -80,7 +106,11 @@ enum Main {
 /// straight from the menu button, sidesteps that.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let settingsTitle = "LocalFlow Settings"
+    private static let feedbackTitle = "Report an Issue"
     private static var settingsWindow: NSWindow?
+    private static var feedbackWindow: NSWindow?
+    /// Windows we own, whose closing should drop the Dock icon again.
+    private static var ownedTitles: Set<String> { [settingsTitle, feedbackTitle] }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NotificationCenter.default.addObserver(
@@ -114,10 +144,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// Drop the transient Dock icon again once the settings window closes.
+    /// Opens the report window. `crash` is non-nil when a crash report from the
+    /// previous run prompted it, which changes the window's framing but not the
+    /// flow: nothing is sent until the reporter sends it.
+    @MainActor
+    static func showFeedback(appState: AppState, crash: CrashReport? = nil) {
+        NSApp.setActivationPolicy(.regular)
+
+        // Rebuilt each time rather than reused: the report is a snapshot of
+        // machine state, and a stale window would show a stale one. (Settings
+        // is reused because its content is live-bound to AppState.)
+        if let existing = feedbackWindow {
+            existing.close()
+        }
+        let hosting = NSHostingController(
+            rootView: FeedbackView(crash: crash).environmentObject(appState)
+        )
+        let window = NSWindow(contentViewController: hosting)
+        window.title = feedbackTitle
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        feedbackWindow = window
+
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// The "your last run crashed" prompt. A short alert rather than the report
+    /// window itself, because the app launches at login — an unrequested 640pt
+    /// window every time you log in is worse than the bug it's reporting.
+    @MainActor
+    static func presentCrashPrompt(appState: AppState, crash: CrashReport) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "LocalFlow quit unexpectedly"
+        alert.informativeText = """
+        macOS saved a crash report from the last run (\(crash.summary)).
+
+        Sending it is what makes the crash fixable — you'll see the whole report and send it from your own mail app.
+        """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Report…")
+        alert.addButton(withTitle: "Ignore")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        showFeedback(appState: appState, crash: crash)
+    }
+
+    /// Drop the transient Dock icon again once the last window we own closes.
+    ///
+    /// The visibility re-check matters now that there are two such windows:
+    /// closing the report window while Settings is still open must not demote
+    /// the app back to `.accessory`, or Settings loses focus and its shortcut
+    /// recorder stops accepting keys — the exact bug the `.regular` promotion
+    /// exists to avoid.
     @objc private func windowWillClose(_ note: Notification) {
-        guard let closing = note.object as? NSWindow, closing.title == Self.settingsTitle else { return }
-        DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+        guard let closing = note.object as? NSWindow, Self.ownedTitles.contains(closing.title) else { return }
+        DispatchQueue.main.async {
+            let stillOpen = NSApp.windows.contains {
+                $0 !== closing && $0.isVisible && Self.ownedTitles.contains($0.title)
+            }
+            if !stillOpen { NSApp.setActivationPolicy(.accessory) }
+        }
     }
 }
 
@@ -180,6 +268,9 @@ struct MenuContent: View {
         // Terminal window. Lives here because that's where you look for it.
         Button("Check for updates…") {
             UpdateCheck.launch()
+        }
+        Button("Report an issue…") {
+            AppDelegate.showFeedback(appState: appState)
         }
         Divider()
         Button("Quit LocalFlow") {

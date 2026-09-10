@@ -139,7 +139,16 @@ final class AppState: ObservableObject {
     private let overlay = RecordingOverlay()
     private var recordingMode: RecordingMode = .pushToTalk
 
-    init() {
+    /// False only in the `--diagnostics` dump, so a report can say so rather
+    /// than presenting an initial-state placeholder as the real status.
+    let live: Bool
+
+    /// `live: false` builds the same settings-backed state without claiming the
+    /// hotkeys, prompting for the microphone or loading a model — what the
+    /// `--diagnostics` dump needs, so the report the UI sends can be assembled
+    /// and inspected from a terminal instead of only by clicking.
+    init(live: Bool = true) {
+        self.live = live
         cleanupEnabled = UserDefaults.standard.bool(forKey: "cleanupEnabled")
         languageCode = UserDefaults.standard.string(forKey: "languageCode") ?? "auto"
         modelName = UserDefaults.standard.string(forKey: "modelName") ?? Transcriber.defaultModel
@@ -148,6 +157,7 @@ final class AppState: ObservableObject {
         recorder.onLevel = { [weak self] level in
             self?.overlay.setLevel(level)
         }
+        guard live else { return }
         registerHotkey()
         Task { await bootstrap() }
     }
@@ -156,17 +166,31 @@ final class AppState: ObservableObject {
         // Surface both permission prompts up front, then load the model.
         let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
         TextInjector.promptForAccessibilityIfNeeded()
-        guard micGranted else {
+        if micGranted {
+            do {
+                try await transcriber.load(modelName)
+                status = .idle
+            } catch {
+                status = .error("Model load failed: \(error.localizedDescription)")
+            }
+            if cleanupEnabled { refreshOllamaHealth() }
+        } else {
             status = .error("Microphone access denied. Grant it in System Settings → Privacy & Security → Microphone.")
-            return
         }
-        do {
-            try await transcriber.load(modelName)
-            status = .idle
-        } catch {
-            status = .error("Model load failed: \(error.localizedDescription)")
-        }
-        if cleanupEnabled { refreshOllamaHealth() }
+        // Last, so it never competes with the permission dialogs for focus.
+        offerPreviousCrashReport()
+    }
+
+    /// If the previous run left a crash report, offer it — exactly once.
+    ///
+    /// Marked seen at *offer* time, not at send time: an unreported crash that
+    /// re-prompts at every login would train the user to dismiss the prompt,
+    /// which costs the next real one.
+    private func offerPreviousCrashReport() {
+        guard let crash = CrashReports.newestUnseen() else { return }
+        CrashReports.markSeen(crash)
+        log.notice("offering crash report: \(crash.fileName, privacy: .public)")
+        AppDelegate.presentCrashPrompt(appState: self, crash: crash)
     }
 
     /// Refreshes the cleanup-availability warning shown in the menu + Settings.
