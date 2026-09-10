@@ -185,6 +185,18 @@ zip: bundle
 	ditto -c -k --keepParent dist/release/$(APP).app dist/$(APP)-$(VERSION).zip
 	@echo "Wrote dist/$(APP)-$(VERSION).zip (ad-hoc signed, no embedded identity)"
 	@shasum -a 256 dist/$(APP)-$(VERSION).zip
+	@# Archive the debug symbols for THIS binary, matched by UUID. Without them
+	@# a crash report from a downloader is a list of addresses: the release build
+	@# is optimized, so the symbols live only in the .dSYM, and `swift build`
+	@# overwrites it on the next build. Upload it alongside the zip on the
+	@# GitHub Release — see docs/FEEDBACK.md for symbolicating with it.
+	@# Verified needed 2026-09-09: the shipped v0.2.1 binary (UUID E154BA96…)
+	@# had no surviving dSYM anywhere on the build machine.
+	cp -R $(BUILD)/$(APP).dSYM dist/$(APP)-$(VERSION).dSYM
+	ditto -c -k --keepParent dist/$(APP)-$(VERSION).dSYM dist/$(APP)-$(VERSION).dSYM.zip
+	rm -rf dist/$(APP)-$(VERSION).dSYM
+	@echo "Wrote dist/$(APP)-$(VERSION).dSYM.zip for these UUIDs:"
+	@dwarfdump --uuid dist/release/$(APP).app/Contents/MacOS/$(APP)
 
 # Which model is actually worth running: error rate vs latency vs RAM, measured
 # on this machine with bench/samples/. `bench-init` synthesizes a starter set;

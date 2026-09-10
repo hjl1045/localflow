@@ -262,13 +262,20 @@ sharing with people who won't build from source.
 
 ## Appendix — `make zip` (release artifact)
 
-Add to the `Makefile` (uses `ditto` so the signed bundle stays intact):
+`make zip` is already in the `Makefile`. It uses `ditto` (plain `zip` can
+corrupt a signed bundle), re-signs a staging copy **ad-hoc** so the published
+artifact carries no developer identity, and refuses to package if either of
+those assertions fails. It emits **two** files:
 
-```make
-VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
+| File | Upload to the Release? | Why |
+| -- | -- | -- |
+| `dist/LocalFlow-<version>.zip` | yes | the app; the Homebrew cask's `sha256` is printed after it's written |
+| `dist/LocalFlow-<version>.dSYM.zip` | **yes** | without it, a crash report from this build is unreadable |
 
-zip: bundle
-	ditto -c -k --keepParent $(BUNDLE) dist/$(APP)-$(VERSION).zip
-	@echo "Wrote dist/$(APP)-$(VERSION).zip"
-	@shasum -a 256 dist/$(APP)-$(VERSION).zip
-```
+The dSYM matters because the release build is optimized: symbol names exist
+only in the `.dSYM`, and `swift build` overwrites it on the next build. The
+shipped v0.2.1 had no surviving dSYM anywhere on the build machine, so crash
+reports from it can't be symbolicated at all. The target prints the UUIDs it
+archived — a report only matches symbols with the same UUID.
+
+Symbolicating with it: [FEEDBACK.md](FEEDBACK.md).

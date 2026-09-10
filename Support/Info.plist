@@ -22,6 +22,15 @@
 	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<!-- Turn a swallowed exception into an actual crash report. AppKit catches
+	     uncaught NSExceptions in the main event loop and carries on, leaving the
+	     app running in an undefined state with NOTHING written to
+	     ~/Library/Logs/DiagnosticReports — so the failure is invisible to the
+	     user, to the crash prompt, and to us. Crashing is the honest outcome:
+	     the Cocoa frameworks are not exception-safe, so "carried on" is a
+	     fiction. See CrashReports.swift. -->
+	<key>NSApplicationCrashOnExceptions</key>
+	<true/>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
