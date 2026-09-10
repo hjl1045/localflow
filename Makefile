@@ -110,6 +110,12 @@ notarize: bundle
 # NOTE: this changes the code signature, so macOS treats it as a different app —
 # the existing Microphone and Accessibility grants do NOT carry over. Remove
 # LocalFlow from both lists in System Settings > Privacy & Security and re-add it.
+# The companion rides along, so it must be signed with the SAME identity —
+# otherwise you get a Developer ID LocalFlow next to an Apple Development
+# companion, which is inconsistent and, on a Mac that demands notarized
+# software, half-broken. Target-specific variables reach prerequisites, so this
+# one assignment redirects check-updates-app's signing too.
+install-notarized: SIGN = $(DEVID)
 install-notarized: notarize check-updates-app
 	-pkill -x $(APP)
 	@if [ -d "/Applications/$(APP).app" ]; then \
