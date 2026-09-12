@@ -75,10 +75,10 @@ install: bundle
 
 # Sign with Developer ID + hardened runtime, notarize, and staple the ticket.
 #
-# For builds SHE installs — a notarized app passes Gatekeeper anywhere, including
-# a managed Mac that refuses un-notarized software. Deliberately NOT wired into
-# `zip`: a Developer ID signature embeds the account identity in the binary, and
-# what strangers download stays ad-hoc. See docs/DISTRIBUTION.md.
+# A notarized app passes Gatekeeper anywhere, including a managed Mac that
+# refuses un-notarized software, and a quarantined download that would otherwise
+# be blocked on first launch. Used by BOTH the local install targets and `zip`
+# since 2026-09-12 — public releases are notarized too. See docs/DISTRIBUTION.md.
 #
 # One-time setup: create the certificate (Xcode > Settings > Accounts > Manage
 # Certificates > + > Developer ID Application), then `bash scripts/setup-notary.sh`.
@@ -205,26 +205,40 @@ uninstall-user:
 	rm -rf "$(USERAPPS)/$(APP).app"
 	@echo "Removed $(APP) from $(USERAPPS)."
 
-# Zip the built .app for a GitHub Release. `ditto` preserves the bundle layout
-# and code signature (plain `zip` can corrupt them). Consumed by the Homebrew
-# cask — see docs/DISTRIBUTION.md.
+# Zip the NOTARIZED .app for a GitHub Release. `ditto` preserves the bundle
+# layout, code signature and stapled ticket (plain `zip` can corrupt them).
+# Consumed by the Homebrew cask — see docs/DISTRIBUTION.md.
 #
-# The published artifact is re-signed AD-HOC in a staging copy, deliberately: an
-# Apple Development signature embeds the developer's email and Team ID, which
-# `codesign -dvvv` prints for anyone who downloads it. Local builds keep the
-# real identity (it's what keeps the TCC Accessibility grant stable across
-# rebuilds); only the thing strangers download is stripped.
-zip: bundle
-	rm -rf $(DIST)/release && mkdir -p $(DIST)/release
-	cp -R $(BUNDLE) $(DIST)/release/$(APP).app
-	codesign --force --deep --sign - --identifier ai.xdlab.LocalFlow $(DIST)/release/$(APP).app
-	@# Assert the positive condition — the artifact must be ad-hoc with no team.
-	@codesign -dvvv $(DIST)/release/$(APP).app 2>&1 | grep -q "Signature=adhoc" \
-		|| { echo "ERROR: release build is not ad-hoc signed — refusing to package"; exit 1; }
-	@codesign -dvvv $(DIST)/release/$(APP).app 2>&1 | grep -q "TeamIdentifier=not set" \
-		|| { echo "ERROR: release build carries a TeamIdentifier — refusing to package"; exit 1; }
-	ditto -c -k --keepParent $(DIST)/release/$(APP).app $(DIST)/$(APP)-$(VERSION).zip
-	@echo "Wrote $(DIST)/$(APP)-$(VERSION).zip (ad-hoc signed, no embedded identity)"
+# Public downloads were ad-hoc signed until 2026-09-12, to keep the developer's
+# identity out of anything strangers could run `codesign -dvvv` on (THE-178).
+# Her call reversed that once the certificate turned out to carry the ORG name,
+# "The Autonomes Technologies LLC", rather than a personal one — so the trade is
+# an organisation name in every download, in exchange for a build that opens by
+# double-clicking: no quarantine dialog, no `xattr` incantation, and a Homebrew
+# cask that works without one.
+#
+# This costs a notary round-trip per release, which is why it depends on
+# `notarize` rather than `bundle`. The artifact IS the notarized bundle — do not
+# re-sign it here, or the stapled ticket stops matching.
+zip: SIGN = $(DEVID)
+zip: notarize
+	ditto -c -k --keepParent $(NOTARIZED) $(DIST)/$(APP)-$(VERSION).zip
+	@# Assert the positive conditions on what actually gets published. Ad-hoc
+	@# used to be asserted here for the opposite reason; the checks inverted with
+	@# the decision, and they matter more now — an unstapled or wrongly signed
+	@# artifact fails on the downloader's Mac, not on this one.
+	@codesign -dvvv $(NOTARIZED) 2>&1 | grep -q "Authority=Developer ID Application" \
+		|| { echo "ERROR: release build is not Developer ID signed — refusing to package"; exit 1; }
+	@codesign -dvvv $(NOTARIZED) 2>&1 | grep -q "flags=.*runtime" \
+		|| { echo "ERROR: release build lacks the hardened runtime — refusing to package"; exit 1; }
+	@xcrun stapler validate $(NOTARIZED) >/dev/null 2>&1 \
+		|| { echo "ERROR: release build has no stapled ticket — it would fail Gatekeeper offline"; exit 1; }
+	@# Gatekeeper's verdict on the unzipped copy, as a downloader receives it.
+	rm -rf $(DIST)/verify && mkdir -p $(DIST)/verify
+	ditto -x -k $(DIST)/$(APP)-$(VERSION).zip $(DIST)/verify
+	spctl -a -vv -t install "$(DIST)/verify/$(APP).app"
+	@rm -rf $(DIST)/verify
+	@echo "Wrote $(DIST)/$(APP)-$(VERSION).zip (Developer ID, notarized, stapled)"
 	@shasum -a 256 $(DIST)/$(APP)-$(VERSION).zip
 	@# Archive the debug symbols for THIS binary, matched by UUID. Without them
 	@# a crash report from a downloader is a list of addresses: the release build
@@ -237,7 +251,7 @@ zip: bundle
 	ditto -c -k --keepParent $(DIST)/$(APP)-$(VERSION).dSYM $(DIST)/$(APP)-$(VERSION).dSYM.zip
 	rm -rf $(DIST)/$(APP)-$(VERSION).dSYM
 	@echo "Wrote $(DIST)/$(APP)-$(VERSION).dSYM.zip for these UUIDs:"
-	@dwarfdump --uuid $(DIST)/release/$(APP).app/Contents/MacOS/$(APP)
+	@dwarfdump --uuid $(NOTARIZED)/Contents/MacOS/$(APP)
 
 # Which model is actually worth running: error rate vs latency vs RAM, measured
 # on this machine with bench/samples/. `bench-init` synthesizes a starter set;
