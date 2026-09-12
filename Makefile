@@ -22,7 +22,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle dist run install install-user uninstall-user notarize install-notarized zip bench bench-init check-updates check-updates-app clean
+.PHONY: build bundle dist run install install-user uninstall-user notarize install-notarized install-notarized-user zip bench bench-init check-updates check-updates-app clean
 
 build:
 	swift build -c $(CONFIG)
@@ -121,32 +121,72 @@ notarize: bundle
 	@rm -f dist/notarize-upload.zip
 	@echo "Notarized and stapled: $(NOTARIZED)"
 
-# Install the notarized build into ~/Applications (the managed-Mac path).
+# Install the notarized build into /Applications — the normal path, mirroring
+# `install` / `install-user`. Use install-notarized-user below only for a Mac
+# that won't take /Applications.
 #
-# NOTE: this changes the code signature, so macOS treats it as a different app —
-# the existing Microphone and Accessibility grants do NOT carry over. Remove
-# LocalFlow from both lists in System Settings > Privacy & Security and re-add it.
-# The companion rides along, so it must be signed with the SAME identity —
+# The companion rides along and must be signed with the SAME identity —
 # otherwise you get a Developer ID LocalFlow next to an Apple Development
 # companion, which is inconsistent and, on a Mac that demands notarized
 # software, half-broken. Target-specific variables reach prerequisites, so this
 # one assignment redirects check-updates-app's signing too.
+#
+# TCC note: grants are keyed to the code signature, so re-installing over a copy
+# signed with the SAME Developer ID keeps Microphone and Accessibility. They are
+# only voided when the identity changes (Apple Development → Developer ID, or a
+# reissued certificate) — which is why this refuses to guess and just reports
+# what the outgoing copy was signed with.
 install-notarized: SIGN = $(DEVID)
 install-notarized: notarize check-updates-app
 	-pkill -x $(APP)
+	@if [ -d "$(USERAPPS)/$(APP).app" ]; then \
+		echo "WARNING: $(USERAPPS)/$(APP).app also exists."; \
+		echo "         Two copies of the same bundle id make LaunchServices and TCC ambiguous."; \
+		echo "         Remove it with:  make uninstall-user"; \
+	fi
+	@# Say whether the grants will survive, instead of always crying wolf.
 	@if [ -d "/Applications/$(APP).app" ]; then \
-		echo "WARNING: /Applications/$(APP).app also exists, signed with a DIFFERENT identity."; \
+		was=$$(codesign -dvvv "/Applications/$(APP).app" 2>&1 | awk -F= '/^Authority=/{print $$2; exit}'); \
+		if [ "$$was" = "$(DEVID)" ]; then \
+			echo "Replacing a copy signed with the same identity — Microphone/Accessibility grants carry over."; \
+		else \
+			echo "NOTE: the installed copy was signed '$$was', replacing it with '$(DEVID)'."; \
+			echo "      The signature changes, so Microphone + Accessibility grants are VOID."; \
+			echo "      Remove LocalFlow from both lists in System Settings > Privacy & Security"; \
+			echo "      and re-add it (remove-then-re-add, not toggle)."; \
+		fi; \
+	fi
+	rm -rf /Applications/$(APP).app "/Applications/Check Model Updates.app"
+	cp -R $(NOTARIZED) /Applications/$(APP).app
+	cp -R "$(CHECKAPP)" "/Applications/Check Model Updates.app"
+	@# LaunchServices needs a beat to register the replaced bundle; without
+	@# this, `open` right after the copy fails with -600.
+	@sleep 2
+	@echo "Installed notarized /Applications/$(APP).app and 'Check Model Updates.app'."
+	spctl -a -vv -t install /Applications/$(APP).app
+	open /Applications/$(APP).app
+
+# Same build, installed into ~/Applications instead — for a managed Mac where
+# writing to /Applications needs admin rights or trips endpoint security.
+# Install one or the other, never both: two copies of the same bundle id leave
+# LaunchServices and TCC unable to tell which one a grant belongs to.
+install-notarized-user: SIGN = $(DEVID)
+install-notarized-user: notarize check-updates-app
+	-pkill -x $(APP)
+	@if [ -d "/Applications/$(APP).app" ]; then \
+		echo "WARNING: /Applications/$(APP).app also exists."; \
 		echo "         Two copies of the same bundle id make LaunchServices and TCC ambiguous —"; \
 		echo "         and you can end up granting Microphone/Accessibility to the wrong one."; \
 		echo "         Remove it BEFORE re-granting permissions:"; \
 		echo "           rm -rf /Applications/$(APP).app '/Applications/Check Model Updates.app'"; \
 	fi
 	mkdir -p "$(USERAPPS)"
-	rm -rf "$(USERAPPS)/$(APP).app"
+	rm -rf "$(USERAPPS)/$(APP).app" "$(USERAPPS)/Check Model Updates.app"
 	cp -R $(NOTARIZED) "$(USERAPPS)/$(APP).app"
+	cp -R "$(CHECKAPP)" "$(USERAPPS)/Check Model Updates.app"
 	@sleep 2
-	@echo "Installed notarized $(USERAPPS)/$(APP).app"
-	@echo "Re-grant Microphone + Accessibility: the signature changed, so the old grants are void."
+	@echo "Installed notarized $(USERAPPS)/$(APP).app and 'Check Model Updates.app'."
+	@echo "If the signature changed, re-grant Microphone + Accessibility — the old grants are void."
 	open "$(USERAPPS)/$(APP).app"
 
 # Install into ~/Applications instead of /Applications — for a managed Mac

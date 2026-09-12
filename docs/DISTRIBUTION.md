@@ -55,7 +55,7 @@ one class of problem and no others.
 | Needs an admin password to install; IT watches writes to `/Applications` | **Yes** — nothing outside `$HOME` is written |
 | "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No** — that's Gatekeeper quarantine. Fix: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`. A locally built app is never quarantined, so `make install-user` from source avoids it entirely |
 | "cannot be opened because the developer cannot be verified" | **No** — the app is ad-hoc signed, not notarized. Same `xattr` fix, or build from source |
-| MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Use `make install-notarized` instead (§2c), or have IT allow-list it |
+| MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Use `make install-notarized-user` instead (§2c), or have IT allow-list it |
 | Microphone or Accessibility toggle won't stick, or the app isn't offered in System Settings | **No** — that's a managed **PPPC** profile. Only IT can grant it |
 
 So: if the blocker is *where the file goes*, this fixes it. If the blocker is
@@ -87,8 +87,20 @@ reboot.
 
 ```sh
 bash scripts/setup-notary.sh     # once: checks the certificate, stores credentials
-make install-notarized           # sign with Developer ID + hardened runtime, notarize, staple, install
+make install-notarized           # → /Applications   (the normal one)
+make install-notarized-user      # → ~/Applications  (managed Mac that won't take /Applications)
 ```
+
+Both sign with Developer ID + hardened runtime, notarize, staple, and install the
+companion app alongside. **Install one or the other, never both** — two copies of
+the same bundle id leave LaunchServices and TCC unable to tell which one a
+permission grant belongs to.
+
+Re-installing over a copy signed with the **same** Developer ID keeps the
+Microphone and Accessibility grants, since TCC keys them to the code signature;
+`install-notarized` inspects the outgoing copy and tells you which case you're in
+rather than always warning. Grants are only voided when the identity changes —
+Apple Development → Developer ID, or a reissued certificate.
 
 A notarized, stapled app passes Gatekeeper anywhere — including a managed Mac
 that refuses un-notarized software. This is the answer to the "MDM requires
@@ -104,7 +116,7 @@ separate on purpose:
 | | signature | identity visible to a downloader |
 |---|---|---|
 | `make zip` → GitHub Release | ad-hoc | none |
-| `make install-notarized` → your own Mac | Developer ID + notarized | yes — but nothing is published |
+| `make install-notarized[-user]` → your own Mac | Developer ID + notarized | yes — but nothing is published |
 
 Anonymous distribution and frictionless install are mutually exclusive. This
 setup takes both, by never applying them to the same artifact.
