@@ -14,7 +14,7 @@ enum Main {
     /// saying so — which is exactly what happened when `--check-updates` was
     /// removed along with the companion app.
     private static let knownFlags: Set<String> = [
-        "--diagnostics", "--diagnostics-mail", "--check-models",
+        "--diagnostics", "--diagnostics-mail", "--check-models", "--check-app",
         "--transcribe", "--language", "--model", "--clean",
     ]
 
@@ -28,10 +28,26 @@ enum Main {
             print("  LocalFlow                                          launch the menu bar app")
             print("  LocalFlow --transcribe FILE [--language xx]")
             print("                              [--model NAME] [--clean]")
+            print("  LocalFlow --check-app                              is a newer LocalFlow released?")
             print("  LocalFlow --check-models                           list newer speech models upstream")
             print("  LocalFlow --diagnostics                            print a bug report")
             print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
             exit(2)
+        }
+        // The network + comparison half of the app check, without the alert.
+        if args.contains("--check-app") {
+            do {
+                let result = try await AppUpdateCheck.check(installed: AppUpdateCheck.installedVersion)
+                print("installed: \(result.installed)")
+                print("latest release: \(result.latest)")
+                print("published: \(result.publishedOn ?? "unknown")")
+                print("newer available: \(result.isNewer)")
+                print("page: \(result.pageURL.absoluteString)")
+                exit(0)
+            } catch {
+                print("FAILED: \(error.localizedDescription)")
+                exit(1)
+            }
         }
         // The network + comparison half of the model check, without the alert.
         if args.contains("--check-models") {
@@ -307,6 +323,13 @@ struct MenuContent: View {
         // Asks Hugging Face whether newer speech models exist. In the app
         // rather than a companion bundle, because the check is one HTTP GET and
         // never needed the repo the old launcher pointed at.
+        // Two checks, two questions. Each names the thing it checks, because a
+        // single "Check for updates…" would be ambiguous about the one detail
+        // that matters — and the old menu item that said exactly that checked
+        // models, which is what made it misleading.
+        Button("Check for app updates…") {
+            AppUpdateCheck.run()
+        }
         Button("Check for model updates…") {
             ModelUpdateCheck.run(appState: appState)
         }
@@ -382,6 +405,12 @@ struct SettingsView: View {
                     launchAtLogin = LoginItem.isEnabled // re-sync if registration failed
                 }
             Text("Hold the push-to-talk key, or tap the hands-free key to start and again to stop. Text is typed at your cursor. Smaller models are faster but less accurate.")
+            // The version was previously visible nowhere in the UI — only
+            // inside a bug report — so a user couldn't answer "am I current?"
+            // even by hand, let alone read an update prompt against it.
+            Text("LocalFlow \(AppUpdateCheck.installedVersion)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

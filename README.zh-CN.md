@@ -141,6 +141,19 @@ ollama pull gemma3:4b
 | [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | 装到另一台 Mac、Homebrew cask、公证 |
 | [docs/FEEDBACK.md](docs/FEEDBACK.md) | 反馈 bug 或崩溃报告、报告去哪里、如何符号化崩溃日志 |
 
+## 更新检查
+
+菜单栏里有两项，各自说明检查的是什么：
+
+- **Check for app updates…** —— 问 GitHub 有没有发布更新版本的 LocalFlow，并可直接打开
+  release 页面。下载包已做公证（notarized），双击即可打开。
+- **Check for model updates…** —— 问 Hugging Face 自上次查看以来有没有新的语音模型。
+
+**这两次点击是 LocalFlow 唯一联网的时刻。** 两者都不会定时运行，都不会发送任何与你或你的
+听写内容相关的信息，只在你主动点击时发生。音频和转写文本完全不离开你的 Mac。
+
+当前版本号显示在设置面板底部。
+
 ## 发现 bug，或者有问题？
 
 最快的方式是在 App 里反馈：**菜单栏图标 → "Report an issue…"**。它会自动带上版本、
