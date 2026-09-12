@@ -141,6 +141,15 @@ ollama pull gemma3:4b
 | [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | 装到另一台 Mac、Homebrew cask、公证 |
 | [docs/FEEDBACK.md](docs/FEEDBACK.md) | 反馈 bug 或崩溃报告、报告去哪里、如何符号化崩溃日志 |
 
+## 发现 bug，或者有问题？
+
+最快的方式是在 App 里反馈：**菜单栏图标 → "Report an issue…"**。它会自动带上版本、
+模型和设置这些排查必需的信息，把**将要发送的全部内容**先展示给你，然后在你自己的
+邮件客户端里打开一封草稿 —— App 本身不会发送任何东西。转写文本只在你勾选后才会包含。
+
+也可以直接[提 issue](https://github.com/hjl1045/localflow/issues)，或发邮件到
+**hello@theautonomes.ai**。
+
 ## 基于这些项目
 
 [WhisperKit](https://github.com/argmaxinc/WhisperKit)（在神经网络引擎上跑 Whisper）· [Whisper](https://github.com/openai/whisper) · [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) · [Ollama](https://ollama.com)

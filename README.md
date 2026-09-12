@@ -141,6 +141,16 @@ Headless pipeline test, no mic or UI:
 | [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, Homebrew cask, notarization |
 | [docs/FEEDBACK.md](docs/FEEDBACK.md) | reporting a bug or crash, where reports land, symbolicating a crash report |
 
+## Found a bug, or got a question?
+
+The quickest route is from inside the app: **menu bar icon → "Report an issue…"**. It
+collects the version, model and settings that a bug report needs, shows you the entire
+payload before anything is sent, and opens a draft in your own mail app — nothing is
+transmitted by the app itself. Transcript text is only included if you tick the box.
+
+Otherwise: [open an issue](https://github.com/hjl1045/localflow/issues), or mail
+**hello@theautonomes.ai**.
+
 ## Built on
 
 [WhisperKit](https://github.com/argmaxinc/WhisperKit) (Whisper on the Neural Engine) · [Whisper](https://github.com/openai/whisper) · [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) · [Ollama](https://ollama.com)
