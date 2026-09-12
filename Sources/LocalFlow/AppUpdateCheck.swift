@@ -110,64 +110,9 @@ enum AppUpdateCheck {
         }
     }
 
-    // MARK: - Presenting
+    // MARK: - Version string
 
     static var installedVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
-    }
-
-    @MainActor
-    static func run() {
-        let installed = installedVersion
-        Task {
-            do {
-                present(try await check(installed: installed))
-            } catch {
-                log.error("app update check failed: \(error.localizedDescription, privacy: .public)")
-                presentFailure(error)
-            }
-        }
-    }
-
-    @MainActor
-    private static func present(_ result: Result) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-
-        if result.isNewer {
-            alert.messageText = "LocalFlow \(result.latest) is available"
-            alert.informativeText = """
-            You're running \(result.installed).\(result.publishedOn.map { "\n\(result.latest) was published on \($0)." } ?? "")
-
-            Downloads open by double-clicking — they're notarized, so there's no security dialog to work around.
-            """
-            alert.addButton(withTitle: "Open Release Page")
-            alert.addButton(withTitle: "Not Now")
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(result.pageURL)
-            }
-        } else {
-            alert.messageText = "LocalFlow is up to date"
-            alert.informativeText = "You're running \(result.installed), which is the latest release."
-            alert.runModal()
-        }
-    }
-
-    @MainActor
-    private static func presentFailure(_ error: Error) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Couldn’t check for a newer LocalFlow"
-        alert.informativeText = """
-        \(error.localizedDescription)
-
-        You're running \(installedVersion). The releases page lists what's current.
-        """
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open Release Page")
-        alert.addButton(withTitle: "OK")
-        if alert.runModal() == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(releasesPage)
-        }
     }
 }

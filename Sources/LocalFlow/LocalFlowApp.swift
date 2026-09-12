@@ -14,7 +14,7 @@ enum Main {
     /// saying so — which is exactly what happened when `--check-updates` was
     /// removed along with the companion app.
     private static let knownFlags: Set<String> = [
-        "--diagnostics", "--diagnostics-mail", "--check-models", "--check-app",
+        "--diagnostics", "--diagnostics-mail", "--check-models", "--check-app", "--check-updates",
         "--transcribe", "--language", "--model", "--clean",
     ]
 
@@ -33,6 +33,22 @@ enum Main {
             print("  LocalFlow --diagnostics                            print a bug report")
             print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
             exit(2)
+        }
+        // Exactly what the combined alert would say, without the alert.
+        if args.contains("--check-updates") {
+            let selected = await MainActor.run { AppState(live: false).modelName }
+            let app: Result<AppUpdateCheck.Result, Error>
+            let models: Result<ModelUpdateCheck.Result, Error>
+            do { app = .success(try await AppUpdateCheck.check(installed: AppUpdateCheck.installedVersion)) }
+            catch { app = .failure(error) }
+            do { models = .success(try await ModelUpdateCheck.check(selected: selected)) }
+            catch { models = .failure(error) }
+            let summary = UpdateCheck.summary(app: app, models: models)
+            print("headline: \(summary.headline)")
+            print("offers release page: \(summary.offersReleasePage)   warning style: \(summary.isWarning)")
+            print("---")
+            print(summary.body)
+            exit(0)
         }
         // The network + comparison half of the app check, without the alert.
         if args.contains("--check-app") {
@@ -323,15 +339,11 @@ struct MenuContent: View {
         // Asks Hugging Face whether newer speech models exist. In the app
         // rather than a companion bundle, because the check is one HTTP GET and
         // never needed the repo the old launcher pointed at.
-        // Two checks, two questions. Each names the thing it checks, because a
-        // single "Check for updates…" would be ambiguous about the one detail
-        // that matters — and the old menu item that said exactly that checked
-        // models, which is what made it misleading.
-        Button("Check for app updates…") {
-            AppUpdateCheck.run()
-        }
-        Button("Check for model updates…") {
-            ModelUpdateCheck.run(appState: appState)
+        // One item, both checks. Splitting them named the subsystems precisely
+        // and still asked the user to know which one they meant — see
+        // UpdateCheck for what "update" can and cannot mean for each half.
+        Button("Check for updates…") {
+            UpdateCheck.run(appState: appState)
         }
         Button("Report an issue…") {
             AppDelegate.showFeedback(appState: appState)
