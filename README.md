@@ -143,16 +143,20 @@ Headless pipeline test, no mic or UI:
 
 ## Updates
 
-Two items in the menu bar, each naming what it checks:
+**Check for updates…** in the menu bar checks both things at once and tells you about each:
 
-- **Check for app updates…** — asks GitHub whether a newer LocalFlow has been released, and
-  offers to open the release page. Downloads are notarized, so they open by double-clicking.
-- **Check for model updates…** — asks Hugging Face whether new speech models have been
-  published since you last looked.
+- **the app** — asks GitHub whether a newer LocalFlow has been released, and offers to open
+  the release page. Downloads are notarized, so they open by double-clicking.
+- **the speech models** — asks Hugging Face whether new models have been published since you
+  last looked.
 
-**These two clicks are the only times LocalFlow talks to the internet.** Neither runs on a
-schedule, neither sends anything about you or your dictation, and both only happen when you
-ask. Audio and transcripts never leave your Mac at all.
+Neither is installed for you. LocalFlow has no self-updater, so an app update is a download
+you choose to run; and a brand-new speech model can't simply be switched on — accuracy varies
+by voice and language, so it has to be benchmarked and added to the picker first.
+
+**That one click is the only time LocalFlow talks to the internet.** It never runs on a
+schedule, it sends nothing about you or your dictation, and it only happens when you ask.
+Audio and transcripts never leave your Mac at all.
 
 The version you're running is shown at the bottom of Settings.
 
