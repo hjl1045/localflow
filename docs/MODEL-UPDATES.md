@@ -41,28 +41,31 @@ python3 scripts/check-updates.py --accept
 
 `scripts/model-snapshot.json` is the committed baseline of what's been seen.
 
-### The clickable versions
+### Running it
 
-There's deliberately **no schedule** — the check runs when you decide to run it,
-from either of two places:
+There's deliberately **no schedule** — the check runs when you decide to run it:
 
-- **LocalFlow's menu bar → "Check for updates…"** — where you'll instinctively
-  look for it.
-- **"Check Model Updates.app"** — a standalone app for the Dock. `make install`
-  installs it to `/Applications` alongside LocalFlow; `make check-updates-app`
-  builds it into `dist.noindex/` on its own.
+```sh
+make check-updates
+```
 
-Both open a Terminal with the report and wait for a keypress before closing.
-`scripts/check-updates-run.command` is the same thing without the icon,
-double-clickable from Finder.
+`scripts/check-updates-run.command` is the same thing, double-clickable from
+Finder if you'd rather not open a terminal; it prints the report and waits for a
+keypress before closing.
 
-The menu item resolves the companion by bundle id, so it follows the app
-wherever it's installed — and falls back to the repo's `dist.noindex/` copy if the
-installed one is gone.
+There used to be a "Check Model Updates.app" in `/Applications` and a matching
+"Check for updates…" item in LocalFlow's menu. Both are gone (2026-09-12). The
+app was a twelve-line launcher that ran `exec open -a Terminal` on the script
+above with the **repo path baked in at build time** — so it did nothing at all
+on a Mac without this repo, which is every Mac but the developer's. In exchange
+it cost a second bundle id in `/Applications` (the source of two separate
+LaunchServices and TCC mix-ups), its own icon, its own signing identity, its own
+install step, and its own notarization gap.
 
-The launcher has the repo path baked in at build time — **re-run
-`make check-updates-app` if the repo ever moves**, or the app will tell you it
-can't find its runner.
+This is a developer chore, so it lives where developer chores live. Checking for
+a newer *LocalFlow* — which is what a user actually wants from a menu item
+called "Check for updates…" — is tracked separately as THE-247 and belongs in
+the app itself.
 
 ## `make bench`
 
