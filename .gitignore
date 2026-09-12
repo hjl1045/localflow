@@ -1,4 +1,5 @@
 .build/
+dist.noindex/
 dist/
 # Benchmark audio: regenerate with `make bench-init`, and real recordings of
 # your own voice are personal — neither belongs in the repo.

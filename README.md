@@ -130,7 +130,7 @@ hotkey up   ──► WhisperKit large-v3-turbo (Neural Engine) ──► raw tr
 Headless pipeline test, no mic or UI:
 
 ```sh
-./dist/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe audio.wav [--language es] [--clean]
+./dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe audio.wav [--language es] [--clean]
 ```
 
 ## Docs

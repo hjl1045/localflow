@@ -21,7 +21,7 @@ auto-downloads (~626 MB) on first run; Ollama is optional (`brew install ollama
 
 ## 2. Copy the prebuilt app
 
-`make zip` (see below) or copy `dist/LocalFlow.app`, then on the target:
+`make zip` (see below) or copy `dist.noindex/LocalFlow.app`, then on the target:
 
 ```sh
 xattr -dr com.apple.quarantine LocalFlow.app   # it's not notarized
@@ -214,9 +214,9 @@ You control it end-to-end; users don't need access to the main repo.
 
 1. **Cut a release** with the artifact attached:
    ```sh
-   make zip                       # -> dist/LocalFlow-<version>.zip, ad-hoc signed
-   shasum -a 256 dist/LocalFlow-*.zip
-   gh release create v0.2.1 dist/LocalFlow-0.2.1.zip --title "LocalFlow v0.2.1" --notes "…"
+   make zip                       # -> dist.noindex/LocalFlow-<version>.zip, ad-hoc signed
+   shasum -a 256 dist.noindex/LocalFlow-*.zip
+   gh release create v0.2.1 dist.noindex/LocalFlow-0.2.1.zip --title "LocalFlow v0.2.1" --notes "…"
    ```
    (For hjl1045 repos, prefix `gh` with `GH_TOKEN="$(gh auth token --user hjl1045)"`.)
 2. **Create a tap repo** named `homebrew-localflow` — the `homebrew-` prefix is
@@ -281,8 +281,8 @@ those assertions fails. It emits **two** files:
 
 | File | Upload to the Release? | Why |
 | -- | -- | -- |
-| `dist/LocalFlow-<version>.zip` | yes | the app; the Homebrew cask's `sha256` is printed after it's written |
-| `dist/LocalFlow-<version>.dSYM.zip` | **yes** | without it, a crash report from this build is unreadable |
+| `dist.noindex/LocalFlow-<version>.zip` | yes | the app; the Homebrew cask's `sha256` is printed after it's written |
+| `dist.noindex/LocalFlow-<version>.dSYM.zip` | **yes** | without it, a crash report from this build is unreadable |
 
 The dSYM matters because the release build is optimized: symbol names exist
 only in the `.dSYM`, and `swift build` overwrites it on the next build. The

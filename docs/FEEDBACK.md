@@ -95,7 +95,7 @@ is a fiction; crashing is the honest outcome.
 A release build is optimized, so a crash report from a downloaded build is a
 list of addresses. The names live only in the `.dSYM`, which `swift build`
 overwrites on the next build — so `make zip` now archives it beside the
-artifact as `dist/LocalFlow-<version>.dSYM.zip`, and **it must be uploaded to
+artifact as `dist.noindex/LocalFlow-<version>.dSYM.zip`, and **it must be uploaded to
 the GitHub Release along with the app zip.**
 
 This is not hypothetical: the shipped v0.2.1 binary (UUID `E154BA96…`) had no
@@ -138,8 +138,8 @@ The report the window sends can be printed from a terminal, which is how the
 non-visual half gets tested:
 
 ```sh
-dist/LocalFlow.app/Contents/MacOS/LocalFlow --diagnostics       # the full report
-dist/LocalFlow.app/Contents/MacOS/LocalFlow --diagnostics-mail  # the trimmed email body + mailto URL length
+dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow --diagnostics       # the full report
+dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow --diagnostics-mail  # the trimmed email body + mailto URL length
 ```
 
 Run these from the **app bundle**, not `.build/release/LocalFlow` — the bare

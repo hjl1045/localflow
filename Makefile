@@ -1,8 +1,21 @@
 APP     := LocalFlow
 CONFIG  := release
 BUILD   := .build/$(CONFIG)
-BUNDLE  := dist/$(APP).app
-CHECKAPP := dist/Check Model Updates.app
+# Build output directory. The `.noindex` SUFFIX is load-bearing, not decoration:
+# every target leaves an .app in here carrying the SAME bundle id as the
+# installed app (the `bundle` output, plus the `notarize` and `zip` staging
+# copies). Indexed, macOS registers all of them — searching shows four
+# LocalFlows, `open -b ai.xdlab.LocalFlow` can resolve to a build artifact, and
+# because TCC keys grants to the code signature (and the notarize staging copy
+# shares the installed copy's Developer ID identity) a Microphone/Accessibility
+# grant can attach to a build artifact that the next `make clean` deletes.
+#
+# A `.metadata_never_index` marker inside the directory does NOT work — measured
+# 2026-09-12: a bundle created under one was still indexed AND still appeared in
+# `lsregister -dump`. Only the directory-name suffix suppressed both.
+DIST    := dist.noindex
+BUNDLE  := $(DIST)/$(APP).app
+CHECKAPP := $(DIST)/Check Model Updates.app
 USERAPPS := $(HOME)/Applications
 
 # Developer ID identity, used ONLY for notarized builds she installs herself.
@@ -11,7 +24,7 @@ DEVID := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"
 # Keychain profile created by `scripts/setup-notary.sh`.
 NOTARY_PROFILE ?= localflow-notary
 ENTITLEMENTS := Support/LocalFlow.entitlements
-NOTARIZED := dist/notarized/$(APP).app
+NOTARIZED := $(DIST)/notarized/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
 VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
 
@@ -22,30 +35,17 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle dist run install install-user uninstall-user notarize install-notarized install-notarized-user zip bench bench-init check-updates check-updates-app clean
+.PHONY: build bundle run install install-user uninstall-user notarize install-notarized install-notarized-user zip bench bench-init check-updates check-updates-app clean
 
 build:
 	swift build -c $(CONFIG)
 
-# Keep Spotlight — and therefore LaunchServices — out of the build directory.
-#
-# Every target here leaves an .app under dist/ that carries the SAME bundle id
-# as the installed app: the staging copy for `zip`, the one for `notarize`, and
-# the plain `bundle` output. Indexed, macOS registers all of them, and then
-# "four copies of LocalFlow" show up in search, `open -b ai.xdlab.LocalFlow`
-# can resolve to a build artifact, and a TCC re-grant can attach to the wrong
-# bundle — grants are keyed to the signature, and dist/notarized carries the
-# same Developer ID identity as /Applications.
-#
-# `make clean` removes dist entirely, so the marker has to be recreated rather
-# than dropped in by hand once.
-dist:
-	@mkdir -p dist
-	@touch dist/.metadata_never_index
+$(DIST):
+	@mkdir -p "$(DIST)"
 
 # SwiftPM builds a bare executable; TCC permissions (mic, accessibility)
 # require a real .app bundle with an Info.plist, so we assemble one.
-bundle: build dist
+bundle: build $(DIST)
 	rm -rf $(BUNDLE)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
 	cp Support/Info.plist $(CONTENTS)/Info.plist
@@ -69,7 +69,7 @@ install: bundle check-updates-app
 	rm -rf /Applications/$(APP).app
 	cp -R $(BUNDLE) /Applications/$(APP).app
 	@# The companion goes to /Applications too — built-but-not-installed means
-	@# it may as well not exist (it sat unfound in dist/ once already).
+	@# it may as well not exist (it sat unfound in the build dir once already).
 	rm -rf "/Applications/Check Model Updates.app"
 	cp -R "$(CHECKAPP)" "/Applications/Check Model Updates.app"
 	@# LaunchServices needs a beat to register the replaced bundle; without
@@ -99,7 +99,7 @@ notarize: bundle
 		echo "  Run: bash scripts/setup-notary.sh"; \
 		exit 1; \
 	}
-	rm -rf dist/notarized && mkdir -p dist/notarized
+	rm -rf $(DIST)/notarized && mkdir -p $(DIST)/notarized
 	cp -R $(BUNDLE) $(NOTARIZED)
 	@# Sign inside-out. `--deep` is unsupported for notarization — Apple rejects
 	@# or silently mis-signs nested code — so nested bundles go first, app last.
@@ -112,13 +112,13 @@ notarize: bundle
 	@codesign -dvvv $(NOTARIZED) 2>&1 | grep -q "flags=.*runtime" \
 		|| { echo "ERROR: hardened runtime missing — notarization would reject it"; exit 1; }
 	codesign --verify --strict --verbose=2 $(NOTARIZED)
-	ditto -c -k --keepParent $(NOTARIZED) dist/notarize-upload.zip
-	xcrun notarytool submit dist/notarize-upload.zip \
+	ditto -c -k --keepParent $(NOTARIZED) $(DIST)/notarize-upload.zip
+	xcrun notarytool submit $(DIST)/notarize-upload.zip \
 		--keychain-profile "$(NOTARY_PROFILE)" --wait
 	xcrun stapler staple $(NOTARIZED)
 	@# The real test: Gatekeeper's own verdict on the stapled bundle.
 	spctl -a -vvv -t install $(NOTARIZED)
-	@rm -f dist/notarize-upload.zip
+	@rm -f $(DIST)/notarize-upload.zip
 	@echo "Notarized and stapled: $(NOTARIZED)"
 
 # Install the notarized build into /Applications — the normal path, mirroring
@@ -230,17 +230,17 @@ uninstall-user:
 # real identity (it's what keeps the TCC Accessibility grant stable across
 # rebuilds); only the thing strangers download is stripped.
 zip: bundle
-	rm -rf dist/release && mkdir -p dist/release
-	cp -R $(BUNDLE) dist/release/$(APP).app
-	codesign --force --deep --sign - --identifier ai.xdlab.LocalFlow dist/release/$(APP).app
+	rm -rf $(DIST)/release && mkdir -p $(DIST)/release
+	cp -R $(BUNDLE) $(DIST)/release/$(APP).app
+	codesign --force --deep --sign - --identifier ai.xdlab.LocalFlow $(DIST)/release/$(APP).app
 	@# Assert the positive condition — the artifact must be ad-hoc with no team.
-	@codesign -dvvv dist/release/$(APP).app 2>&1 | grep -q "Signature=adhoc" \
+	@codesign -dvvv $(DIST)/release/$(APP).app 2>&1 | grep -q "Signature=adhoc" \
 		|| { echo "ERROR: release build is not ad-hoc signed — refusing to package"; exit 1; }
-	@codesign -dvvv dist/release/$(APP).app 2>&1 | grep -q "TeamIdentifier=not set" \
+	@codesign -dvvv $(DIST)/release/$(APP).app 2>&1 | grep -q "TeamIdentifier=not set" \
 		|| { echo "ERROR: release build carries a TeamIdentifier — refusing to package"; exit 1; }
-	ditto -c -k --keepParent dist/release/$(APP).app dist/$(APP)-$(VERSION).zip
-	@echo "Wrote dist/$(APP)-$(VERSION).zip (ad-hoc signed, no embedded identity)"
-	@shasum -a 256 dist/$(APP)-$(VERSION).zip
+	ditto -c -k --keepParent $(DIST)/release/$(APP).app $(DIST)/$(APP)-$(VERSION).zip
+	@echo "Wrote $(DIST)/$(APP)-$(VERSION).zip (ad-hoc signed, no embedded identity)"
+	@shasum -a 256 $(DIST)/$(APP)-$(VERSION).zip
 	@# Archive the debug symbols for THIS binary, matched by UUID. Without them
 	@# a crash report from a downloader is a list of addresses: the release build
 	@# is optimized, so the symbols live only in the .dSYM, and `swift build`
@@ -248,11 +248,11 @@ zip: bundle
 	@# GitHub Release — see docs/FEEDBACK.md for symbolicating with it.
 	@# Verified needed 2026-09-09: the shipped v0.2.1 binary (UUID E154BA96…)
 	@# had no surviving dSYM anywhere on the build machine.
-	cp -R $(BUILD)/$(APP).dSYM dist/$(APP)-$(VERSION).dSYM
-	ditto -c -k --keepParent dist/$(APP)-$(VERSION).dSYM dist/$(APP)-$(VERSION).dSYM.zip
-	rm -rf dist/$(APP)-$(VERSION).dSYM
-	@echo "Wrote dist/$(APP)-$(VERSION).dSYM.zip for these UUIDs:"
-	@dwarfdump --uuid dist/release/$(APP).app/Contents/MacOS/$(APP)
+	cp -R $(BUILD)/$(APP).dSYM $(DIST)/$(APP)-$(VERSION).dSYM
+	ditto -c -k --keepParent $(DIST)/$(APP)-$(VERSION).dSYM $(DIST)/$(APP)-$(VERSION).dSYM.zip
+	rm -rf $(DIST)/$(APP)-$(VERSION).dSYM
+	@echo "Wrote $(DIST)/$(APP)-$(VERSION).dSYM.zip for these UUIDs:"
+	@dwarfdump --uuid $(DIST)/release/$(APP).app/Contents/MacOS/$(APP)
 
 # Which model is actually worth running: error rate vs latency vs RAM, measured
 # on this machine with bench/samples/. `bench-init` synthesizes a starter set;
@@ -290,4 +290,4 @@ Support/CheckUpdatesIcon.icns:
 	./Support/make-icon.sh CheckUpdatesIcon arrow.triangle.2.circlepath
 
 clean:
-	rm -rf .build dist
+	rm -rf .build "$(DIST)"
