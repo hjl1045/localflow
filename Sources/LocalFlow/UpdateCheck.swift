@@ -62,12 +62,18 @@ enum UpdateCheck {
         var lines: [String] = []
 
         // --- app ---
+        //
+        // Both lines say "up to date" in the boring case, on purpose. The
+        // earlier wording reported internals — a model count, a "baseline" —
+        // which only means something to someone who wrote the checker. A user
+        // asking "am I current?" wants an answer, not a status dump.
         switch app {
         case .success(let result) where result.isNewer:
-            lines.append("**App** — \(result.installed) installed, \(result.latest) available"
-                + (result.publishedOn.map { ", published \($0)" } ?? ""))
+            lines.append("**App** — \(result.latest) available"
+                + (result.publishedOn.map { ", published \($0)" } ?? "")
+                + " (you have \(result.installed))")
         case .success(let result):
-            lines.append("**App** — \(result.installed), the latest release")
+            lines.append("**App** — up to date (\(result.installed))")
         case .failure(let error):
             lines.append("**App** — couldn't check: \(error.localizedDescription)")
         }
@@ -75,20 +81,20 @@ enum UpdateCheck {
         // --- models ---
         switch models {
         case .success(let result) where result.selectedMissingUpstream:
-            lines.append("**Models** — the model you're using (\(result.selected)) is no longer "
-                + "published upstream. It keeps working; a fresh install couldn't fetch it.")
-        case .success(let result) where result.isFirstCheck:
-            lines.append("**Models** — first check, so there's nothing to compare against yet. "
-                + "\(result.upstreamCount) published upstream; this is now the baseline.")
+            lines.append("**Models** — the model you're using is no longer published. It keeps "
+                + "working, but reinstalling LocalFlow wouldn't be able to download it again.")
         case .success(let result) where !result.newModels.isEmpty:
-            lines.append("**Models** — \(result.newModels.count) new since your last check: "
-                + result.newModels.prefix(5).joined(separator: ", ")
-                + (result.newModels.count > 5 ? ", and \(result.newModels.count - 5) more" : ""))
-            // The judgment that keeps this from being an invitation to churn.
-            lines.append("Newer is not better — accuracy varies by voice and language, so a new "
-                + "model has to be added to the picker and benchmarked before it's worth using.")
-        case .success(let result):
-            lines.append("**Models** — nothing new; \(result.upstreamCount) published upstream")
+            lines.append("**Models** — \(result.newModels.count) new available: "
+                + result.newModels.prefix(4).joined(separator: ", ")
+                + (result.newModels.count > 4 ? ", and \(result.newModels.count - 4) more" : ""))
+            // Her own rule, and the reason there's no button next to this.
+            lines.append("Newer isn't automatically better — accuracy varies by voice and "
+                + "language, so a new model has to be tested before it's offered here.")
+        case .success:
+            // The first-ever check reads as "up to date" too. It technically has
+            // no history to compare against, but that distinction is ours, not
+            // the user's, and there is nothing for them to do about it.
+            lines.append("**Models** — up to date")
         case .failure(let error):
             lines.append("**Models** — couldn't check: \(error.localizedDescription)")
         }
