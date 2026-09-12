@@ -14,7 +14,7 @@ enum Main {
     /// saying so — which is exactly what happened when `--check-updates` was
     /// removed along with the companion app.
     private static let knownFlags: Set<String> = [
-        "--diagnostics", "--diagnostics-mail",
+        "--diagnostics", "--diagnostics-mail", "--check-models",
         "--transcribe", "--language", "--model", "--clean",
     ]
 
@@ -28,9 +28,28 @@ enum Main {
             print("  LocalFlow                                          launch the menu bar app")
             print("  LocalFlow --transcribe FILE [--language xx]")
             print("                              [--model NAME] [--clean]")
+            print("  LocalFlow --check-models                           list newer speech models upstream")
             print("  LocalFlow --diagnostics                            print a bug report")
             print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
             exit(2)
+        }
+        // The network + comparison half of the model check, without the alert.
+        if args.contains("--check-models") {
+            let selected = await MainActor.run { AppState(live: false).modelName }
+            do {
+                let result = try await ModelUpdateCheck.check(selected: selected)
+                print("selected: \(result.selected)")
+                print("repo last modified: \(result.repoLastModified ?? "unknown")")
+                print("upstream models: \(result.upstreamCount)")
+                print("selected still published upstream: \(!result.selectedMissingUpstream)")
+                print("first check (baseline saved): \(result.isFirstCheck)")
+                print("new since last check: \(result.newModels.count)")
+                for model in result.newModels { print("  \(model)") }
+                exit(0)
+            } catch {
+                print("FAILED: \(error.localizedDescription)")
+                exit(1)
+            }
         }
         if args.contains("--diagnostics") || args.contains("--diagnostics-mail") {
             let state = await MainActor.run { AppState(live: false) }
@@ -284,6 +303,12 @@ struct MenuContent: View {
         // delegate promotes us to a regular app while Settings is open.
         Button("Settings…") {
             AppDelegate.showSettings(appState: appState)
+        }
+        // Asks Hugging Face whether newer speech models exist. In the app
+        // rather than a companion bundle, because the check is one HTTP GET and
+        // never needed the repo the old launcher pointed at.
+        Button("Check for model updates…") {
+            ModelUpdateCheck.run(appState: appState)
         }
         Button("Report an issue…") {
             AppDelegate.showFeedback(appState: appState)
