@@ -22,6 +22,13 @@ USERAPPS := $(HOME)/Applications
 DEVID := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/{print $$2; exit}')
 # Keychain profile created by `scripts/setup-notary.sh`.
 NOTARY_PROFILE ?= localflow-notary
+# Which keychain FILE holds that profile, passed explicitly on every notarytool
+# call. Without it, `store-credentials` writes to the "Local Items" / iCloud
+# keychain (its documented default), where the credential is invisible to
+# `security find-generic-password` and vanished three times on 2026-09-08,
+# 09-12 and again minutes later — twice mid-session, once blocking a release.
+# A keychain file is inspectable and not subject to Local Items eviction.
+NOTARY_KEYCHAIN ?= $(HOME)/Library/Keychains/login.keychain-db
 ENTITLEMENTS := Support/LocalFlow.entitlements
 NOTARIZED := $(DIST)/notarized/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
@@ -89,7 +96,8 @@ notarize: bundle
 		echo "  'Developer ID Application'. An 'Apple Development' cert cannot notarize."; \
 		exit 1; \
 	fi
-	@xcrun notarytool history --keychain-profile "$(NOTARY_PROFILE)" >/dev/null 2>&1 || { \
+	@xcrun notarytool history --keychain-profile "$(NOTARY_PROFILE)" \
+		--keychain "$(NOTARY_KEYCHAIN)" >/dev/null 2>&1 || { \
 		echo "ERROR: no notary credentials stored as '$(NOTARY_PROFILE)'."; \
 		echo "  Run: bash scripts/setup-notary.sh"; \
 		exit 1; \
@@ -109,7 +117,8 @@ notarize: bundle
 	codesign --verify --strict --verbose=2 $(NOTARIZED)
 	ditto -c -k --keepParent $(NOTARIZED) $(DIST)/notarize-upload.zip
 	xcrun notarytool submit $(DIST)/notarize-upload.zip \
-		--keychain-profile "$(NOTARY_PROFILE)" --wait
+		--keychain-profile "$(NOTARY_PROFILE)" \
+		--keychain "$(NOTARY_KEYCHAIN)" --wait
 	xcrun stapler staple $(NOTARIZED)
 	@# The real test: Gatekeeper's own verdict on the stapled bundle.
 	spctl -a -vvv -t install $(NOTARIZED)

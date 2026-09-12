@@ -14,6 +14,7 @@
 
 set -uo pipefail
 PROFILE="${NOTARY_PROFILE:-localflow-notary}"
+NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
 
 say() { printf '\n%s\n' "$*"; }
 fail() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
@@ -48,7 +49,7 @@ TEAM_ID=$(printf '%s' "$DEVID" | sed -n 's/.*(\([A-Z0-9]*\))$/\1/p')
 say "Team ID: $TEAM_ID"
 
 # --- 2. Notary credentials ----------------------------------------------------
-if xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
+if xcrun notarytool history --keychain-profile "$PROFILE" --keychain "$NOTARY_KEYCHAIN" >/dev/null 2>&1; then
   say "Notary credentials '$PROFILE' already work. Nothing to do."
   say "You can now run:  make install-notarized"
   exit 0
@@ -73,14 +74,21 @@ read -r APPLE_ID
 [ -n "$APPLE_ID" ] || fail "no Apple ID entered"
 
 say "notarytool will now ask for the app-specific password (input is hidden)."
+# --keychain is load-bearing. Without it, store-credentials writes to the
+# "Local Items" / iCloud keychain — its documented default — where the item is
+# invisible to `security find-generic-password` and disappeared three times
+# (2026-09-08, and twice on 09-12, once blocking a release). Naming a keychain
+# FILE makes storage deterministic and inspectable. The Makefile passes the same
+# path on every read, so the two must stay in sync.
 xcrun notarytool store-credentials "$PROFILE" \
   --apple-id "$APPLE_ID" \
   --team-id "$TEAM_ID" \
+  --keychain "$NOTARY_KEYCHAIN" \
   || fail "store-credentials failed — check the Apple ID and app-specific password"
 
 # --- 3. Prove it actually works ----------------------------------------------
 say "Verifying the credentials against Apple's notary service..."
-if xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
+if xcrun notarytool history --keychain-profile "$PROFILE" --keychain "$NOTARY_KEYCHAIN" >/dev/null 2>&1; then
   say "Credentials work. Now run:  make install-notarized"
 else
   fail "credentials were stored but the notary service rejected them"
