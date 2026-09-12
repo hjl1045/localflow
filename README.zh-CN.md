@@ -130,7 +130,7 @@ ollama pull gemma3:4b
 不用麦克风和界面的流水线测试：
 
 ```sh
-./dist/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe audio.wav [--language zh] [--clean]
+./dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe audio.wav [--language zh] [--clean]
 ```
 
 ## 文档
