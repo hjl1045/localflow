@@ -79,7 +79,7 @@ struct FeedbackView: View {
             .frame(minHeight: 200)
 
             if mailFailed {
-                Text("No mail app answered. Use Copy or Save instead and send it however you like — the address is \(report.map(Feedback.intakeAddress(for:)) ?? Feedback.feedbackIntakeAddress).")
+                Text("No mail app answered. Use Copy or Save instead and send it however you like — the address is \(Feedback.intakeAddress).")
                     .font(.caption)
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
