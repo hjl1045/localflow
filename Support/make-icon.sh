@@ -4,7 +4,6 @@
 # doesn't need to regenerate them.
 #
 #   ./make-icon.sh                              -> AppIcon.icns      (mic.fill)
-#   ./make-icon.sh CheckUpdatesIcon arrow.triangle.2.circlepath
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 NAME="${1:-AppIcon}"

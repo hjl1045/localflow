@@ -15,7 +15,6 @@ BUILD   := .build/$(CONFIG)
 # `lsregister -dump`. Only the directory-name suffix suppressed both.
 DIST    := dist.noindex
 BUNDLE  := $(DIST)/$(APP).app
-CHECKAPP := $(DIST)/Check Model Updates.app
 USERAPPS := $(HOME)/Applications
 
 # Developer ID identity, used ONLY for notarized builds she installs herself.
@@ -35,7 +34,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install install-user uninstall-user notarize install-notarized install-notarized-user zip bench bench-init check-updates check-updates-app clean
+.PHONY: build bundle run install install-user uninstall-user notarize install-notarized install-notarized-user zip bench bench-init check-updates clean
 
 build:
 	swift build -c $(CONFIG)
@@ -64,18 +63,14 @@ run: bundle
 
 # Install into /Applications so Spotlight, Launchpad, and Finder can launch it
 # like any app. Quit any running copy first so it can be replaced, then relaunch.
-install: bundle check-updates-app
+install: bundle
 	-pkill -x $(APP)
 	rm -rf /Applications/$(APP).app
 	cp -R $(BUNDLE) /Applications/$(APP).app
-	@# The companion goes to /Applications too — built-but-not-installed means
-	@# it may as well not exist (it sat unfound in the build dir once already).
-	rm -rf "/Applications/Check Model Updates.app"
-	cp -R "$(CHECKAPP)" "/Applications/Check Model Updates.app"
 	@# LaunchServices needs a beat to register the replaced bundle; without
 	@# this, `open` right after the copy fails with -600.
 	@sleep 2
-	@echo "Installed /Applications/$(APP).app and 'Check Model Updates.app' — both in Spotlight/Launchpad."
+	@echo "Installed /Applications/$(APP).app — in Spotlight and Launchpad."
 	open /Applications/$(APP).app
 
 # Sign with Developer ID + hardened runtime, notarize, and staple the ticket.
@@ -125,19 +120,13 @@ notarize: bundle
 # `install` / `install-user`. Use install-notarized-user below only for a Mac
 # that won't take /Applications.
 #
-# The companion rides along and must be signed with the SAME identity —
-# otherwise you get a Developer ID LocalFlow next to an Apple Development
-# companion, which is inconsistent and, on a Mac that demands notarized
-# software, half-broken. Target-specific variables reach prerequisites, so this
-# one assignment redirects check-updates-app's signing too.
-#
 # TCC note: grants are keyed to the code signature, so re-installing over a copy
 # signed with the SAME Developer ID keeps Microphone and Accessibility. They are
 # only voided when the identity changes (Apple Development → Developer ID, or a
 # reissued certificate) — which is why this refuses to guess and just reports
 # what the outgoing copy was signed with.
 install-notarized: SIGN = $(DEVID)
-install-notarized: notarize check-updates-app
+install-notarized: notarize
 	-pkill -x $(APP)
 	@if [ -d "$(USERAPPS)/$(APP).app" ]; then \
 		echo "WARNING: $(USERAPPS)/$(APP).app also exists."; \
@@ -156,13 +145,12 @@ install-notarized: notarize check-updates-app
 			echo "      and re-add it (remove-then-re-add, not toggle)."; \
 		fi; \
 	fi
-	rm -rf /Applications/$(APP).app "/Applications/Check Model Updates.app"
+	rm -rf /Applications/$(APP).app
 	cp -R $(NOTARIZED) /Applications/$(APP).app
-	cp -R "$(CHECKAPP)" "/Applications/Check Model Updates.app"
 	@# LaunchServices needs a beat to register the replaced bundle; without
 	@# this, `open` right after the copy fails with -600.
 	@sleep 2
-	@echo "Installed notarized /Applications/$(APP).app and 'Check Model Updates.app'."
+	@echo "Installed notarized /Applications/$(APP).app."
 	spctl -a -vv -t install /Applications/$(APP).app
 	open /Applications/$(APP).app
 
@@ -171,21 +159,20 @@ install-notarized: notarize check-updates-app
 # Install one or the other, never both: two copies of the same bundle id leave
 # LaunchServices and TCC unable to tell which one a grant belongs to.
 install-notarized-user: SIGN = $(DEVID)
-install-notarized-user: notarize check-updates-app
+install-notarized-user: notarize
 	-pkill -x $(APP)
 	@if [ -d "/Applications/$(APP).app" ]; then \
 		echo "WARNING: /Applications/$(APP).app also exists."; \
 		echo "         Two copies of the same bundle id make LaunchServices and TCC ambiguous —"; \
 		echo "         and you can end up granting Microphone/Accessibility to the wrong one."; \
 		echo "         Remove it BEFORE re-granting permissions:"; \
-		echo "           rm -rf /Applications/$(APP).app '/Applications/Check Model Updates.app'"; \
+		echo "           rm -rf /Applications/$(APP).app"; \
 	fi
 	mkdir -p "$(USERAPPS)"
-	rm -rf "$(USERAPPS)/$(APP).app" "$(USERAPPS)/Check Model Updates.app"
+	rm -rf "$(USERAPPS)/$(APP).app"
 	cp -R $(NOTARIZED) "$(USERAPPS)/$(APP).app"
-	cp -R "$(CHECKAPP)" "$(USERAPPS)/Check Model Updates.app"
 	@sleep 2
-	@echo "Installed notarized $(USERAPPS)/$(APP).app and 'Check Model Updates.app'."
+	@echo "Installed notarized $(USERAPPS)/$(APP).app."
 	@echo "If the signature changed, re-grant Microphone + Accessibility — the old grants are void."
 	open "$(USERAPPS)/$(APP).app"
 
@@ -197,18 +184,16 @@ install-notarized-user: notarize check-updates-app
 #
 # Install ONE of these per machine. Two copies of the same bundle id confuse
 # LaunchServices about which one a hotkey or a login item refers to.
-install-user: bundle check-updates-app
+install-user: bundle
 	-pkill -x $(APP)
 	@if [ -d "/Applications/$(APP).app" ]; then \
 		echo "WARNING: /Applications/$(APP).app also exists. Two copies of the same"; \
 		echo "         bundle id confuse LaunchServices and the TCC grants. Remove it:"; \
-		echo "           rm -rf /Applications/$(APP).app '/Applications/Check Model Updates.app'"; \
+		echo "           rm -rf /Applications/$(APP).app"; \
 	fi
 	mkdir -p "$(USERAPPS)"
 	rm -rf "$(USERAPPS)/$(APP).app"
 	cp -R $(BUNDLE) "$(USERAPPS)/$(APP).app"
-	rm -rf "$(USERAPPS)/Check Model Updates.app"
-	cp -R "$(CHECKAPP)" "$(USERAPPS)/Check Model Updates.app"
 	@# LaunchServices needs a beat to register the bundle before `open` works.
 	@sleep 2
 	@echo "Installed $(USERAPPS)/$(APP).app — nothing was written to /Applications."
@@ -217,7 +202,7 @@ install-user: bundle check-updates-app
 # Remove the user-level install (leaves any /Applications copy alone).
 uninstall-user:
 	-pkill -x $(APP)
-	rm -rf "$(USERAPPS)/$(APP).app" "$(USERAPPS)/Check Model Updates.app"
+	rm -rf "$(USERAPPS)/$(APP).app"
 	@echo "Removed $(APP) from $(USERAPPS)."
 
 # Zip the built .app for a GitHub Release. `ditto` preserves the bundle layout
@@ -272,22 +257,5 @@ check-updates:
 # The same check as a double-clickable app (Dock/Spotlight), for running it by
 # hand instead of on a schedule. The launcher shells back to this repo, so
 # re-run this target if the repo ever moves.
-check-updates-app: Support/CheckUpdatesIcon.icns
-	rm -rf "$(CHECKAPP)"
-	mkdir -p "$(CHECKAPP)/Contents/MacOS" "$(CHECKAPP)/Contents/Resources"
-	sed 's|@REPO@|$(CURDIR)|' Support/check-updates-launcher.sh > "$(CHECKAPP)/Contents/MacOS/CheckModelUpdates"
-	chmod +x "$(CHECKAPP)/Contents/MacOS/CheckModelUpdates" scripts/check-updates-run.command
-	cp Support/CheckUpdates-Info.plist "$(CHECKAPP)/Contents/Info.plist"
-	cp Support/CheckUpdatesIcon.icns "$(CHECKAPP)/Contents/Resources/CheckUpdatesIcon.icns"
-	printf 'APPL????' > "$(CHECKAPP)/Contents/PkgInfo"
-	codesign --force --sign "$(SIGN)" --identifier ai.xdlab.LocalFlow.CheckUpdates "$(CHECKAPP)"
-	@echo "Built $(CHECKAPP) — drag it to the Dock, or run: open '$(CHECKAPP)'"
-
-# Regenerated from an SF Symbol; committed so a normal build never needs Swift
-# to render an icon. Refresh ring = the check cycle, same family background as
-# the mic so the two read as siblings but not twins at Dock size.
-Support/CheckUpdatesIcon.icns:
-	./Support/make-icon.sh CheckUpdatesIcon arrow.triangle.2.circlepath
-
 clean:
 	rm -rf .build "$(DIST)"

@@ -43,9 +43,6 @@ enum CrashReports {
 
     /// The newest LocalFlow crash report we haven't offered yet, if any.
     ///
-    /// Matches the companion app's reports too — a crash in "Check Model
-    /// Updates" is still a LocalFlow bug, and it's the half most likely to
-    /// break on a Mac that isn't the developer's.
     static func newestUnseen(now: Date = Date()) -> CrashReport? {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(
@@ -60,7 +57,7 @@ enum CrashReports {
         let candidates = entries.filter { url in
             let name = url.lastPathComponent
             guard url.pathExtension == "ips" else { return false }
-            return name.hasPrefix("LocalFlow") || name.hasPrefix("Check Model Updates")
+            return name.hasPrefix("LocalFlow")
         }
 
         let newest = candidates

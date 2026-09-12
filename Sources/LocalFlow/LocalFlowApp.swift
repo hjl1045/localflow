@@ -8,24 +8,30 @@ enum Main {
     /// headless pipeline test (no mic/hotkey/UI) and exits — used to verify
     /// the ASR + cleanup stages end-to-end. Without flags, launches the
     /// menu bar app.
+    /// Flags the headless paths below understand. Anything else starting with
+    /// `--` is a typo or a flag that used to exist, and falling through to
+    /// `LocalFlowApp.main()` would silently launch the menu bar app instead of
+    /// saying so — which is exactly what happened when `--check-updates` was
+    /// removed along with the companion app.
+    private static let knownFlags: Set<String> = [
+        "--diagnostics", "--diagnostics-mail",
+        "--transcribe", "--language", "--model", "--clean",
+    ]
+
     static func main() async {
         let args = CommandLine.arguments
-        // Same resolution + launch the "Check for updates…" menu item performs,
-        // reachable without clicking a menu — that's how it gets tested.
-        if args.contains("--check-updates") {
-            guard let url = UpdateCheck.companionURL() else {
-                print("FAILED: companion app not installed — run `make install`")
-                exit(1)
-            }
-            print("Companion app: \(url.path)")
-            await MainActor.run { UpdateCheck.launch() }
-            try? await Task.sleep(for: .seconds(2)) // let the launch complete
-            exit(0)
+        let unknown = args.dropFirst().filter { $0.hasPrefix("--") && !knownFlags.contains($0) }
+        if !unknown.isEmpty {
+            print("Unknown option\(unknown.count > 1 ? "s" : ""): \(unknown.joined(separator: ", "))")
+            print("")
+            print("Usage:")
+            print("  LocalFlow                                          launch the menu bar app")
+            print("  LocalFlow --transcribe FILE [--language xx]")
+            print("                              [--model NAME] [--clean]")
+            print("  LocalFlow --diagnostics                            print a bug report")
+            print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
+            exit(2)
         }
-        // Prints the exact report the "Report an issue…" window would send, so
-        // the payload — and the mailto URL built from it — can be checked
-        // without a mail client or a click. `--diagnostics-mail` prints the
-        // trimmed email variant instead of the full text.
         if args.contains("--diagnostics") || args.contains("--diagnostics-mail") {
             let state = await MainActor.run { AppState(live: false) }
             let crash = CrashReports.newestUnseen()
@@ -263,11 +269,6 @@ struct MenuContent: View {
         // delegate promotes us to a regular app while Settings is open.
         Button("Settings…") {
             AppDelegate.showSettings(appState: appState)
-        }
-        // Opens the companion app, which runs the model/dependency check in a
-        // Terminal window. Lives here because that's where you look for it.
-        Button("Check for updates…") {
-            UpdateCheck.launch()
         }
         Button("Report an issue…") {
             AppDelegate.showFeedback(appState: appState)

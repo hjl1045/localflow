@@ -4,10 +4,6 @@ import AppKit
 // rounded-rect, inset within the 1024px canvas the way macOS app icons are.
 // Writes a PNG to argv[1] (default icon-1024.png); make-icon.sh turns it into
 // the .iconset sizes and an .icns. Run via `swift make-icon.swift out.png [symbol]`.
-//
-// The companion "Check Model Updates" launcher shares this background on
-// purpose — same family — and differs by glyph, so the two are told apart by
-// silhouette at Dock size: mic mass vs refresh ring.
 
 let canvas: CGFloat = 1024
 let inset: CGFloat = 100 // macOS icon art sits inside the canvas, not edge-to-edge
