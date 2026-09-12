@@ -21,15 +21,31 @@ import os
 enum Feedback {
     private static let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "feedback")
 
-    /// The Autonomes team intake address (Linear → Settings → Teams → The
-    /// Autonomes → General → "Create issues by email").
+    /// Where a report is mailed, chosen by what kind of report it is.
     ///
-    /// This is public by necessity — it ships inside the app. That's an
-    /// accepted, reversible risk rather than an oversight: the local part
-    /// carries a random token, so it isn't guessable, and if it ever gets
-    /// scraped and spammed, regenerating it in that Linear setting invalidates
-    /// the old one. Rotation procedure: `docs/FEEDBACK.md`.
-    static let intakeAddress = "the-autonomes-84537e82dae6@intake.linear.app"
+    /// An email carries only a subject and a body — there is no field that says
+    /// "project: LocalFlow, label: Bug". Linear's one hook for attaching
+    /// properties to incoming mail is a **team template with its own address**,
+    /// so the address itself is the signal, and the app picks it.
+    ///
+    /// These are public by necessity — they ship inside the app. That's an
+    /// accepted, reversible risk rather than an oversight: each local part
+    /// carries a random token, so they aren't guessable, and if one is ever
+    /// scraped and spammed, regenerating it in Linear invalidates the old one.
+    /// Rotation procedure: `docs/FEEDBACK.md`.
+    static func intakeAddress(for diagnostics: Diagnostics) -> String {
+        diagnostics.crash == nil ? feedbackIntakeAddress : crashIntakeAddress
+    }
+
+    /// Template "LocalFlow crash report" → project LocalFlow, label `Bug`.
+    static let crashIntakeAddress = "localflow-crash-report-7977588461c1@intake.linear.app"
+
+    /// Still the plain *team* intake address, which files into the team with no
+    /// project and no label. Its template ("LocalFlow feedback" → project
+    /// LocalFlow, label `feedback › general`) exists, but enabling its email
+    /// address is a settings toggle that hasn't been flipped yet. Swap this one
+    /// line when it is — nothing else needs to change.
+    static let feedbackIntakeAddress = "the-autonomes-84537e82dae6@intake.linear.app"
 
     /// Mail clients and `NSWorkspace.open` both get unreliable with very long
     /// URLs, and a report that silently fails to open is worse than a short
@@ -57,7 +73,7 @@ enum Feedback {
         guard let subject = encode(diagnostics.subject), let encodedBody = encode(body) else {
             return nil
         }
-        return URL(string: "mailto:\(intakeAddress)?subject=\(subject)&body=\(encodedBody)")
+        return URL(string: "mailto:\(intakeAddress(for: diagnostics))?subject=\(subject)&body=\(encodedBody)")
     }
 
     @MainActor

@@ -32,7 +32,7 @@ enum Main {
             let report = await Diagnostics.collect(appState: state, crash: crash)
             if args.contains("--diagnostics-mail") {
                 let body = Feedback.mailBody(for: report)
-                print("To: \(Feedback.intakeAddress)")
+                print("To: \(Feedback.intakeAddress(for: report))")
                 print("Subject: \(report.subject)")
                 print("Body bytes: \(body.count)")
                 if let url = Feedback.mailtoURL(for: report) {
