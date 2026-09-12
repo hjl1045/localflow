@@ -53,8 +53,8 @@ one class of problem and no others.
 | Symptom | Does `install-user` help? |
 |---|---|
 | Needs an admin password to install; IT watches writes to `/Applications` | **Yes** — nothing outside `$HOME` is written |
-| "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No** — that's Gatekeeper quarantine. Fix: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`. A locally built app is never quarantined, so `make install-user` from source avoids it entirely |
-| "cannot be opened because the developer cannot be verified" | **No** — the app is ad-hoc signed, not notarized. Same `xattr` fix, or build from source |
+| "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No**, and since 2026-09-12 it shouldn't happen at all — release artifacts are notarized and stapled, so a quarantined download passes Gatekeeper. **v0.2.1 and earlier are ad-hoc signed** and do show it — the decision came after v0.2.1 shipped, so the first notarized artifact is the next release. On those: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`, or upgrade |
+| "cannot be opened because the developer cannot be verified" | **No** — and fixed for releases after v0.2.1. v0.2.1 and earlier are ad-hoc signed and do show this: same `xattr` fix, or build from source |
 | MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Use `make install-notarized-user` instead (§2c), or have IT allow-list it |
 | Microphone or Accessibility toggle won't stick, or the app isn't offered in System Settings | **No** — that's a managed **PPPC** profile. Only IT can grant it |
 
@@ -83,7 +83,7 @@ answer for both and can't distinguish them. On a machine with only the
 user-level install, flip the Settings toggle once and check that it survives a
 reboot.
 
-## 2c. Notarized builds — for your own machines only
+## 2c. Notarized builds — for your machines and for public releases
 
 ```sh
 bash scripts/setup-notary.sh     # once: checks the certificate, stores credentials
@@ -106,20 +106,31 @@ A notarized, stapled app passes Gatekeeper anywhere — including a managed Mac
 that refuses un-notarized software. This is the answer to the "MDM requires
 notarized apps" row in §2b, the one thing a location change can't fix.
 
-### Why this is NOT wired into `make zip`
+### Public releases are notarized too (decided 2026-09-12)
 
-A **Developer ID** signature embeds the account identity in the binary, and
-`codesign -dvvv` prints it to anyone who downloads the app. That is exactly what
-the ad-hoc re-signing in the `zip` target exists to strip. So the two paths stay
-separate on purpose:
+They weren't, for a year. A **Developer ID** signature embeds the signing
+identity in the binary and `codesign -dvvv` prints it to anyone who downloads
+the app — so `make zip` used to re-sign ad-hoc, stripping the identity the way
+[THE-178](https://linear.app/the-autonomes/issue/THE-178) cleaned it out of the commit history. Anonymous distribution and
+frictionless install looked mutually exclusive.
+
+The organisation enrollment dissolved most of that. The certificate reads
+**`Developer ID Application: The Autonomes Technologies LLC`**, not a personal
+name or email, so what a downloader learns is the org — which is already public.
+Weighed against a first launch that needs no `xattr` incantation and a Homebrew
+cask that finally works, the trade went the other way:
 
 | | signature | identity visible to a downloader |
 |---|---|---|
-| `make zip` → GitHub Release | ad-hoc | none |
-| `make install-notarized[-user]` → your own Mac | Developer ID + notarized | yes — but nothing is published |
+| `make zip` → GitHub Release | Developer ID + notarized + stapled | yes — the organisation name |
+| `make install-notarized[-user]` → your own Mac | same | same |
 
-Anonymous distribution and frictionless install are mutually exclusive. This
-setup takes both, by never applying them to the same artifact.
+Both paths are now the same artifact shape, which is also one fewer thing to get
+wrong. The cost is a notary round-trip per release, so `zip` depends on
+`notarize`, and it refuses to package anything that isn't Developer ID signed,
+hardened-runtime, and stapled — an unstapled artifact fails on the downloader's
+Mac, not on yours. It ends by unzipping its own output and asking `spctl` for
+Gatekeeper's verdict on the copy a stranger would get.
 
 ### One-time setup
 
@@ -176,37 +187,31 @@ A cask downloads a prebuilt artifact from a URL and drops the app in
   install is *worse* than building from source, and as of Homebrew 6 there is no
   longer a supported flag to work around it.
 
-### The quarantine problem — measured 2026-07-19, Homebrew 6.0.11
+### The quarantine problem — solved 2026-09-12
 
-Release artifacts here are **ad-hoc signed and not notarized** (deliberately —
-an Apple Development signature embeds the developer's email and Team ID in the
-binary, see the `zip` target in the Makefile). Gatekeeper therefore blocks the
-downloaded app on first launch.
-
-The advice you'll find everywhere is `brew install --cask --no-quarantine`.
-**That flag no longer exists:**
+This used to be the reason not to publish a cask. Release artifacts were ad-hoc
+signed and unnotarized, so Gatekeeper blocked the downloaded app on first
+launch, and the advice everyone repeats — `brew install --cask --no-quarantine`
+— **does not work, because that flag no longer exists** (measured 2026-07-19,
+Homebrew 6.0.11):
 
 ```
 $ brew install --cask --no-quarantine localflow
 Error: invalid option: --no-quarantine
 ```
 
-So a cask user must clear quarantine by hand after installing:
+A cask user therefore had to run `xattr -dr com.apple.quarantine` by hand, which
+is a strictly worse first run than building from source.
 
-```sh
-brew install --cask hjl1045/localflow/localflow
-xattr -dr com.apple.quarantine /Applications/LocalFlow.app
-```
+**Releases are now notarized and stapled**, so a quarantined download passes
+Gatekeeper and opens on a double-click. The blocker is gone and a cask is worth
+publishing; the routes below are no longer hypothetical. Keep in mind:
 
-That is a strictly worse first-run experience than `make install` from source,
-which produces a locally built app that was never quarantined at all.
-
-**Recommendation: don't publish the cask yet.** It only becomes worth doing with
-notarization, which needs a paid Apple Developer account ($99/yr): Developer ID
-signing → `xcrun notarytool submit --wait` → `xcrun stapler staple`. Note that
-notarizing re-introduces the identity-in-binary tradeoff — a Developer ID
-signature also carries the team identity, which is unavoidable for a notarized
-public app.
+- the ticket must be **stapled**, not merely notarized — stapling is what makes
+  the check work offline, and `make zip` asserts it;
+- the cask's `sha256` changes with every release, and a stale one makes installs
+  fail. Refresh it whenever you cut one (see the release checklist in the
+  [FEEDBACK] and [Appendix] sections).
 
 ### Route A — your own tap (the path, when you do publish)
 
@@ -214,7 +219,7 @@ You control it end-to-end; users don't need access to the main repo.
 
 1. **Cut a release** with the artifact attached:
    ```sh
-   make zip                       # -> dist.noindex/LocalFlow-<version>.zip, ad-hoc signed
+   make zip                       # -> dist.noindex/LocalFlow-<version>.zip, notarized + stapled
    shasum -a 256 dist.noindex/LocalFlow-*.zip
    gh release create v0.2.1 dist.noindex/LocalFlow-0.2.1.zip --title "LocalFlow v0.2.1" --notes "…"
    ```
@@ -274,14 +279,14 @@ sharing with people who won't build from source.
 
 ## Appendix — `make zip` (release artifact)
 
-`make zip` is already in the `Makefile`. It uses `ditto` (plain `zip` can
-corrupt a signed bundle), re-signs a staging copy **ad-hoc** so the published
-artifact carries no developer identity, and refuses to package if either of
-those assertions fails. It emits **two** files:
+`make zip` is already in the `Makefile`. It depends on `notarize`, packages the
+**notarized, stapled** bundle with `ditto` (plain `zip` can corrupt a signed
+bundle), and refuses to package anything that isn't Developer ID signed,
+hardened-runtime and stapled. It emits **two** files:
 
 | File | Upload to the Release? | Why |
 | -- | -- | -- |
-| `dist.noindex/LocalFlow-<version>.zip` | yes | the app; the Homebrew cask's `sha256` is printed after it's written |
+| `dist.noindex/LocalFlow-<version>.zip` | yes | the app — Developer ID, notarized, stapled; the cask's `sha256` is printed after it's written |
 | `dist.noindex/LocalFlow-<version>.dSYM.zip` | **yes** | without it, a crash report from this build is unreadable |
 
 The dSYM matters because the release build is optimized: symbol names exist
