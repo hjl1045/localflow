@@ -52,51 +52,55 @@ enum UpdateCheck {
 
     static func summary(
         app: Result<AppUpdateCheck.Result, Error>,
-        models: Result<ModelUpdateCheck.Result, Error>
+        models: Result<ModelUpdateCheck.Result, Error>,
+        installed: String = AppUpdateCheck.installedVersion
     ) -> Summary {
         let appUpdate = try? app.get()
         let modelUpdate = try? models.get()
         let appHasUpdate = appUpdate?.isNewer == true
         let newModels = modelUpdate?.newModels ?? []
 
+        // Only break the answer down when there is something to break down.
+        // Her instruction, 2026-09-12: "you are using the latest version. no
+        // need to differentiate model or app." When everything is current, the
+        // App/Models split is the checker explaining itself — the user asked
+        // one question and wants one sentence.
         var lines: [String] = []
 
-        // --- app ---
-        //
-        // Both lines say "up to date" in the boring case, on purpose. The
-        // earlier wording reported internals — a model count, a "baseline" —
-        // which only means something to someone who wrote the checker. A user
-        // asking "am I current?" wants an answer, not a status dump.
-        switch app {
-        case .success(let result) where result.isNewer:
-            lines.append("**App** — \(result.latest) available"
-                + (result.publishedOn.map { ", published \($0)" } ?? "")
-                + " (you have \(result.installed))")
-        case .success(let result):
-            lines.append("**App** — up to date (\(result.installed))")
-        case .failure(let error):
-            lines.append("**App** — couldn't check: \(error.localizedDescription)")
-        }
+        let appOK = appUpdate != nil
+        let modelsOK = modelUpdate != nil
+        let retiredModel = modelUpdate?.selectedMissingUpstream == true
+        let nothingToReport = !appHasUpdate && newModels.isEmpty && !retiredModel
 
-        // --- models ---
-        switch models {
-        case .success(let result) where result.selectedMissingUpstream:
-            lines.append("**Models** — the model you're using is no longer published. It keeps "
-                + "working, but reinstalling LocalFlow wouldn't be able to download it again.")
-        case .success(let result) where !result.newModels.isEmpty:
-            lines.append("**Models** — \(result.newModels.count) new available: "
-                + result.newModels.prefix(4).joined(separator: ", ")
-                + (result.newModels.count > 4 ? ", and \(result.newModels.count - 4) more" : ""))
-            // Her own rule, and the reason there's no button next to this.
-            lines.append("Newer isn't automatically better — accuracy varies by voice and "
-                + "language, so a new model has to be tested before it's offered here.")
-        case .success:
-            // The first-ever check reads as "up to date" too. It technically has
-            // no history to compare against, but that distinction is ours, not
-            // the user's, and there is nothing for them to do about it.
-            lines.append("**Models** — up to date")
-        case .failure(let error):
-            lines.append("**Models** — couldn't check: \(error.localizedDescription)")
+        if nothingToReport && appOK && modelsOK {
+            // One line, no breakdown. The version makes the claim checkable.
+            lines.append("LocalFlow \(installed)")
+        } else {
+            if appHasUpdate, let result = appUpdate {
+                lines.append("**App** — \(result.latest) available"
+                    + (result.publishedOn.map { ", published \($0)" } ?? "")
+                    + " (you have \(result.installed))")
+            } else if !appOK, case .failure(let error) = app {
+                lines.append("**App** — couldn't check: \(error.localizedDescription)")
+            } else {
+                lines.append("**App** — up to date (\(installed))")
+            }
+
+            if retiredModel {
+                lines.append("**Models** — the model you're using is no longer published. It "
+                    + "keeps working, but reinstalling LocalFlow couldn't download it again.")
+            } else if !newModels.isEmpty {
+                lines.append("**Models** — \(newModels.count) new available: "
+                    + newModels.prefix(4).joined(separator: ", ")
+                    + (newModels.count > 4 ? ", and \(newModels.count - 4) more" : ""))
+                // Her own rule, and the reason there's no button beside it.
+                lines.append("Newer isn't automatically better — accuracy varies by voice and "
+                    + "language, so a new model has to be tested before it's offered here.")
+            } else if !modelsOK, case .failure(let error) = models {
+                lines.append("**Models** — couldn't check: \(error.localizedDescription)")
+            } else {
+                lines.append("**Models** — up to date")
+            }
         }
 
         let verdict = headline(appHasUpdate: appHasUpdate, newModelCount: newModels.count,
@@ -162,7 +166,7 @@ enum UpdateCheck {
         // both halves actually reported.
         if appFailed { return ("Couldn’t check for a newer LocalFlow", true) }
         if modelsFailed { return ("Couldn’t check for new speech models", true) }
-        return ("Everything is up to date", false)
+        return ("You're using the latest version", false)
     }
 }
 
