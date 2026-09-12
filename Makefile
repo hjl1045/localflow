@@ -22,14 +22,30 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install install-user uninstall-user notarize install-notarized zip bench bench-init check-updates check-updates-app clean
+.PHONY: build bundle dist run install install-user uninstall-user notarize install-notarized zip bench bench-init check-updates check-updates-app clean
 
 build:
 	swift build -c $(CONFIG)
 
+# Keep Spotlight — and therefore LaunchServices — out of the build directory.
+#
+# Every target here leaves an .app under dist/ that carries the SAME bundle id
+# as the installed app: the staging copy for `zip`, the one for `notarize`, and
+# the plain `bundle` output. Indexed, macOS registers all of them, and then
+# "four copies of LocalFlow" show up in search, `open -b ai.xdlab.LocalFlow`
+# can resolve to a build artifact, and a TCC re-grant can attach to the wrong
+# bundle — grants are keyed to the signature, and dist/notarized carries the
+# same Developer ID identity as /Applications.
+#
+# `make clean` removes dist entirely, so the marker has to be recreated rather
+# than dropped in by hand once.
+dist:
+	@mkdir -p dist
+	@touch dist/.metadata_never_index
+
 # SwiftPM builds a bare executable; TCC permissions (mic, accessibility)
 # require a real .app bundle with an Info.plist, so we assemble one.
-bundle: build
+bundle: build dist
 	rm -rf $(BUNDLE)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
 	cp Support/Info.plist $(CONTENTS)/Info.plist
