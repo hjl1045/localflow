@@ -43,29 +43,39 @@ python3 scripts/check-updates.py --accept
 
 ### Running it
 
-There's deliberately **no schedule** — the check runs when you decide to run it:
+There's deliberately **no schedule** — the check runs when you ask for it, from
+either of two places, which cover different ground:
 
-```sh
-make check-updates
-```
+| | covers | needs the repo? |
+|---|---|---|
+| **Menu bar → "Check for model updates…"** | the ASR model repo on Hugging Face | no |
+| `make check-updates` | that **plus** Swift dependencies and Ollama (CLI + model weights) | yes |
 
-`scripts/check-updates-run.command` is the same thing, double-clickable from
-Finder if you'd rather not open a terminal; it prints the report and waits for a
-keypress before closing.
+The in-app check is one public HTTP GET against
+`huggingface.co/api/models/argmaxinc/whisperkit-coreml` — the same repo the
+script watches, with the model-folder list derived the same way, so the two
+can't drift. It reports what appeared **since your last check**, keeping its own
+snapshot in `UserDefaults`; the first run says so and saves a baseline rather
+than presenting all 27 models as news. It also tells you if the model you're
+currently using has stopped being published upstream, which matters because a
+re-download would then fail.
 
-There used to be a "Check Model Updates.app" in `/Applications` and a matching
-"Check for updates…" item in LocalFlow's menu. Both are gone (2026-09-12). The
-app was a twelve-line launcher that ran `exec open -a Terminal` on the script
-above with the **repo path baked in at build time** — so it did nothing at all
-on a Mac without this repo, which is every Mac but the developer's. In exchange
-it cost a second bundle id in `/Applications` (the source of two separate
-LaunchServices and TCC mix-ups), its own icon, its own signing identity, its own
-install step, and its own notarization gap.
+Diffing against the four models Settings offers was the obvious first idea and
+it's wrong: the app curates 4 of ~27 on purpose, so that comparison reports 23
+rows of "not curated" as though they were new.
 
-This is a developer chore, so it lives where developer chores live. Checking for
-a newer *LocalFlow* — which is what a user actually wants from a menu item
-called "Check for updates…" — is tracked separately as THE-247 and belongs in
-the app itself.
+`scripts/check-updates-run.command` is the script version, double-clickable from
+Finder; it prints the report and waits for a keypress before closing.
+
+This check is the **only** off-machine request LocalFlow makes, it fires only on
+that menu click, and it sends nothing about you — it asks which models exist.
+Dictation stays entirely local.
+
+There used to be a separate "Check Model Updates.app" in `/Applications` doing
+this. It was a twelve-line launcher that ran `exec open -a Terminal` on the
+script above with **the repo path baked in at build time**, so it did nothing on
+any Mac without this repo. Deleted 2026-09-12; the capability moved into the app
+where it belonged, which needed no repo in the first place.
 
 ## `make bench`
 
