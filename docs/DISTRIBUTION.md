@@ -132,6 +132,37 @@ hardened-runtime, and stapled — an unstapled artifact fails on the downloader'
 Mac, not on yours. It ends by unzipping its own output and asking `spctl` for
 Gatekeeper's verdict on the copy a stranger would get.
 
+### ⚠️ If the notary credential keeps vanishing
+
+It vanished three times — 2026-09-08, then twice on 2026-09-12, the last time blocking a
+release — each within minutes of a successful notarization, with the login keychain
+unlocked (`no-timeout`) and no `make clean` or reboot in between.
+
+Cause, most likely: `notarytool store-credentials` **defaults to the "Local Items" /
+iCloud keychain**, per its own `--help`. Items there are invisible to
+`security find-generic-password` (which is why "the item is absent" was weaker evidence
+than it looked) and subject to Local Items / iCloud eviction.
+
+So `setup-notary.sh` now passes `--keychain ~/Library/Keychains/login.keychain-db`, and
+the Makefile passes the same path on every `notarytool` call. A keychain *file* is
+deterministic and inspectable:
+
+```sh
+security find-generic-password -s com.apple.gke.notary.tool  # should now find it
+```
+
+**This is a hypothesis with good mechanism support, not a proven fix** — it needs a few
+days of surviving normal use before it's believed. Until then, pre-flight before anything
+that depends on it:
+
+```sh
+xcrun notarytool history --keychain-profile localflow-notary \
+  --keychain ~/Library/Keychains/login.keychain-db >/dev/null && echo ok
+```
+
+Recovery always needs the Apple ID app-specific password, so it is a stop-and-ask failure,
+never something a script can retry.
+
 ### One-time setup
 
 1. **The certificate** — Xcode > Settings… > Accounts > your team > Manage
