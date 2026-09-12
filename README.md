@@ -141,6 +141,21 @@ Headless pipeline test, no mic or UI:
 | [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, Homebrew cask, notarization |
 | [docs/FEEDBACK.md](docs/FEEDBACK.md) | reporting a bug or crash, where reports land, symbolicating a crash report |
 
+## Updates
+
+Two items in the menu bar, each naming what it checks:
+
+- **Check for app updates…** — asks GitHub whether a newer LocalFlow has been released, and
+  offers to open the release page. Downloads are notarized, so they open by double-clicking.
+- **Check for model updates…** — asks Hugging Face whether new speech models have been
+  published since you last looked.
+
+**These two clicks are the only times LocalFlow talks to the internet.** Neither runs on a
+schedule, neither sends anything about you or your dictation, and both only happen when you
+ask. Audio and transcripts never leave your Mac at all.
+
+The version you're running is shown at the bottom of Settings.
+
 ## Found a bug, or got a question?
 
 The quickest route is from inside the app: **menu bar icon → "Report an issue…"**. It
