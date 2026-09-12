@@ -17,6 +17,15 @@ struct FeedbackView: View {
     @State private var userDescription = ""
     @State private var includeTranscript = false
     @State private var mailFailed = false
+    /// True once a draft has been handed to the mail client.
+    ///
+    /// Without this the button reads "Send…" forever, so clicking it again —
+    /// the natural thing to do when the window stays open and nothing visibly
+    /// happened — silently opens a *second* draft. Duplicate reports are worse
+    /// than a missing one: they cost triage time and make one bug look like a
+    /// pattern. Editing the report re-enables it, since that's a genuinely new
+    /// report rather than an impatient second click.
+    @State private var draftOpened = false
 
     private var hasTranscript: Bool { appState.recentTranscripts.first != nil }
 
@@ -80,6 +89,10 @@ struct FeedbackView: View {
         }
         .padding(16)
         .frame(width: 560, height: 640)
+        // Changing what the report says makes it a different report, so let it
+        // be sent again.
+        .onChange(of: userDescription) { draftOpened = false }
+        .onChange(of: includeTranscript) { draftOpened = false }
         .task(id: includeTranscript) {
             diagnostics = await Diagnostics.collect(
                 appState: appState,
@@ -111,12 +124,19 @@ struct FeedbackView: View {
                 if let report { Feedback.save(report) }
             }
             Spacer()
-            Button("Send…") {
+            if draftOpened {
+                Text("Draft opened — send it from your mail app")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button(draftOpened ? "Draft opened" : "Send…") {
                 guard let report else { return }
-                mailFailed = !Feedback.openMail(with: report)
+                let opened = Feedback.openMail(with: report)
+                mailFailed = !opened
+                draftOpened = opened
             }
             .keyboardShortcut(.defaultAction)
-            .disabled(report == nil)
+            .disabled(report == nil || draftOpened)
         }
     }
 }
