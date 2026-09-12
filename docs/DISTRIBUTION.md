@@ -144,12 +144,22 @@ iCloud keychain**, per its own `--help`. Items there are invisible to
 than it looked) and subject to Local Items / iCloud eviction.
 
 So `setup-notary.sh` now passes `--keychain ~/Library/Keychains/login.keychain-db`, and
-the Makefile passes the same path on every `notarytool` call. A keychain *file* is
-deterministic and inspectable:
+the Makefile passes the same path on every `notarytool` call.
+
+**`--keychain` genuinely selects the store** — verified by pointing a read at a different
+keychain file and at a nonexistent path, both of which correctly fail:
 
 ```sh
-security find-generic-password -s com.apple.gke.notary.tool  # should now find it
+xcrun notarytool history --keychain-profile localflow-notary \
+  --keychain ~/Library/Keychains/login.keychain-db    # found
+xcrun notarytool history --keychain-profile localflow-notary \
+  --keychain ~/Library/Keychains/openvpn.keychain-db  # not found
 ```
+
+⚠️ `security find-generic-password -s com.apple.gke.notary.tool` does **not** find the item
+even when it is present — notarytool stores it under attributes that query doesn't match.
+Use the `notarytool` read above as the check; `security` returning nothing proves nothing
+in either direction.
 
 **This is a hypothesis with good mechanism support, not a proven fix** — it needs a few
 days of surviving normal use before it's believed. Until then, pre-flight before anything
@@ -252,7 +262,7 @@ You control it end-to-end; users don't need access to the main repo.
    ```sh
    make zip                       # -> dist.noindex/LocalFlow-<version>.zip, notarized + stapled
    shasum -a 256 dist.noindex/LocalFlow-*.zip
-   gh release create v0.2.1 dist.noindex/LocalFlow-0.2.1.zip --title "LocalFlow v0.2.1" --notes "…"
+   gh release create v0.2.2 dist.noindex/LocalFlow-0.2.2.zip --title "LocalFlow v0.2.1" --notes "…"
    ```
    (For hjl1045 repos, prefix `gh` with `GH_TOKEN="$(gh auth token --user hjl1045)"`.)
 2. **Create a tap repo** named `homebrew-localflow` — the `homebrew-` prefix is
@@ -260,8 +270,8 @@ You control it end-to-end; users don't need access to the main repo.
 3. Add `Casks/localflow.rb`:
    ```ruby
    cask "localflow" do
-     version "0.2.1"
-     sha256 "e10a99e0c907f4e97781d40b24bd4b8cdcbfcef59e7174bab16f06ceed2a186c"
+     version "0.2.2"
+     sha256 "6eb13f2370b9c00a935052ce1bb4853e88699b014b6ce958f1342a5799aff005"
 
      url "https://github.com/hjl1045/localflow/releases/download/v#{version}/LocalFlow-#{version}.zip"
      name "LocalFlow"
