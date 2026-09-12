@@ -36,7 +36,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-BINARY = REPO / "dist/LocalFlow.app/Contents/MacOS/LocalFlow"
+# Kept in sync with the Makefile's DIST. The `.noindex` suffix is load-bearing
+# there — it stops Spotlight registering build copies of the app alongside the
+# installed one — so this path can't be shortened back to "dist".
+BINARY = REPO / "dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow"
 SAMPLES = REPO / "bench/samples"
 
 # Mirrors AppState.models -- the choices actually offered in Settings.

@@ -1,0 +1,254 @@
+{
+  "large-v3-v20240930_626MB": {
+    "mean_error_rate": 0.006802721088435374,
+    "load_seconds": 5.8,
+    "peak_rss_gb": 0.137674752,
+    "samples": [
+      {
+        "name": "en-longform",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 1.38,
+        "reference": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it.",
+        "hypothesis": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it."
+      },
+      {
+        "name": "en-numbers",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.88,
+        "reference": "The meeting is at four thirty on March fifteenth, in room two hundred and twelve.",
+        "hypothesis": "The meeting is at 4.30 on March 15, in room 212."
+      },
+      {
+        "name": "en-plain",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.86,
+        "reference": "The quick brown fox jumps over the lazy dog near the riverbank.",
+        "hypothesis": "The quick brown fox jumps over the lazy dog near the riverbank."
+      },
+      {
+        "name": "en-technical",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.91,
+        "reference": "Push the branch to GitHub and open a pull request against main, then merge it once the checks are green.",
+        "hypothesis": "Push the branch to GitHub and open a pull request against main, then merge it once the checks are green"
+      },
+      {
+        "name": "zh-codeswitch",
+        "language": "zh",
+        "error_rate": 0.047619047619047616,
+        "seconds": 0.86,
+        "reference": "我今天 review 了那个 pull request，然后 merge 到 main branch 了。",
+        "hypothesis": "我今天review了那個 pull request,然後merge到main branch了"
+      },
+      {
+        "name": "zh-plain",
+        "language": "zh",
+        "error_rate": 0.0,
+        "seconds": 0.86,
+        "reference": "今天天气很好，我们下午去公园散步吧。",
+        "hypothesis": "今天天气很好,我们下午去公园散步吧。"
+      },
+      {
+        "name": "zh-technical",
+        "language": "zh",
+        "error_rate": 0.0,
+        "seconds": 0.98,
+        "reference": "请把这个分支推送到远程仓库，然后创建一个合并请求。",
+        "hypothesis": "请把这个分支推送到远程仓库,然后创建一个合并请求。"
+      }
+    ]
+  },
+  "small": {
+    "mean_error_rate": 0.03358843537414966,
+    "load_seconds": 4.0,
+    "peak_rss_gb": 0.144965632,
+    "samples": [
+      {
+        "name": "en-longform",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.68,
+        "reference": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it.",
+        "hypothesis": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it."
+      },
+      {
+        "name": "en-numbers",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.33,
+        "reference": "The meeting is at four thirty on March fifteenth, in room two hundred and twelve.",
+        "hypothesis": "The meeting is at 4.30 on March 15, in room 212."
+      },
+      {
+        "name": "en-plain",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.3,
+        "reference": "The quick brown fox jumps over the lazy dog near the riverbank.",
+        "hypothesis": "The quick brown fox jumps over the lazy dog near the riverbank."
+      },
+      {
+        "name": "en-technical",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.51,
+        "reference": "Push the branch to GitHub and open a pull request against main, then merge it once the checks are green.",
+        "hypothesis": "Push the branch to GitHub and open a pull request against main, then merge it once the checks are green."
+      },
+      {
+        "name": "zh-codeswitch",
+        "language": "zh",
+        "error_rate": 0.047619047619047616,
+        "seconds": 0.33,
+        "reference": "我今天 review 了那个 pull request，然后 merge 到 main branch 了。",
+        "hypothesis": "我今天review了那个poolrequest,然后merge到main branch了。"
+      },
+      {
+        "name": "zh-plain",
+        "language": "zh",
+        "error_rate": 0.1875,
+        "seconds": 0.32,
+        "reference": "今天天气很好，我们下午去公园散步吧。",
+        "hypothesis": "今天天氣很好,我們下午去公園散步吧!"
+      },
+      {
+        "name": "zh-technical",
+        "language": "zh",
+        "error_rate": 0.0,
+        "seconds": 0.4,
+        "reference": "请把这个分支推送到远程仓库，然后创建一个合并请求。",
+        "hypothesis": "请把这个分支推送到远程仓库,然后创建一个合并请求。"
+      }
+    ]
+  },
+  "base": {
+    "mean_error_rate": 0.11959849157054125,
+    "load_seconds": 3.0,
+    "peak_rss_gb": 0.112115712,
+    "samples": [
+      {
+        "name": "en-longform",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.25,
+        "reference": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it.",
+        "hypothesis": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it."
+      },
+      {
+        "name": "en-numbers",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.11,
+        "reference": "The meeting is at four thirty on March fifteenth, in room two hundred and twelve.",
+        "hypothesis": "The meeting is at 430 on March 15, in room 212."
+      },
+      {
+        "name": "en-plain",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.1,
+        "reference": "The quick brown fox jumps over the lazy dog near the riverbank.",
+        "hypothesis": "The quick brown fox jumps over the lazy dog near the riverbank."
+      },
+      {
+        "name": "en-technical",
+        "language": "en",
+        "error_rate": 0.1,
+        "seconds": 0.14,
+        "reference": "Push the branch to GitHub and open a pull request against main, then merge it once the checks are green.",
+        "hypothesis": "Push the branch to GitHub and open a pool request against Maine, then merge it once the checks are green."
+      },
+      {
+        "name": "zh-codeswitch",
+        "language": "zh",
+        "error_rate": 0.07142857142857142,
+        "seconds": 0.13,
+        "reference": "我今天 review 了那个 pull request，然后 merge 到 main branch 了。",
+        "hypothesis": "我今天 review 了那個 full request然後 merge 到 main branch 了"
+      },
+      {
+        "name": "zh-plain",
+        "language": "zh",
+        "error_rate": 0.1875,
+        "seconds": 0.11,
+        "reference": "今天天气很好，我们下午去公园散步吧。",
+        "hypothesis": "今天天氣很好,我們下午去公園散步吧"
+      },
+      {
+        "name": "zh-technical",
+        "language": "zh",
+        "error_rate": 0.4782608695652174,
+        "seconds": 0.15,
+        "reference": "请把这个分支推送到远程仓库，然后创建一个合并请求。",
+        "hypothesis": "請把這個分支推送到遠程倉庫,然後創建一個合併請求。"
+      }
+    ]
+  },
+  "tiny": {
+    "mean_error_rate": 0.14868751848565512,
+    "load_seconds": 3.0,
+    "peak_rss_gb": 0.105070592,
+    "samples": [
+      {
+        "name": "en-longform",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.17,
+        "reference": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it.",
+        "hypothesis": "I was thinking about the transcription pipeline this morning and I realized that the real cost is not the model size but the time it takes to load and warm up before the very first word is recognized, which is what people actually feel when they use it."
+      },
+      {
+        "name": "en-numbers",
+        "language": "en",
+        "error_rate": 0.0,
+        "seconds": 0.07,
+        "reference": "The meeting is at four thirty on March fifteenth, in room two hundred and twelve.",
+        "hypothesis": "The meeting is at 430 on March 15, in room 212."
+      },
+      {
+        "name": "en-plain",
+        "language": "en",
+        "error_rate": 0.16666666666666666,
+        "seconds": 0.08,
+        "reference": "The quick brown fox jumps over the lazy dog near the riverbank.",
+        "hypothesis": "the quick brown fox jumps over the lazy dog near the river bank."
+      },
+      {
+        "name": "en-technical",
+        "language": "en",
+        "error_rate": 0.05,
+        "seconds": 0.1,
+        "reference": "Push the branch to GitHub and open a pull request against main, then merge it once the checks are green.",
+        "hypothesis": "Push the branch to GitHub and open a full request against Main, then merge it once the checks are green."
+      },
+      {
+        "name": "zh-codeswitch",
+        "language": "zh",
+        "error_rate": 0.07142857142857142,
+        "seconds": 0.08,
+        "reference": "我今天 review 了那个 pull request，然后 merge 到 main branch 了。",
+        "hypothesis": "我今天 review了那个pure request,然后 merged到 main branch了"
+      },
+      {
+        "name": "zh-plain",
+        "language": "zh",
+        "error_rate": 0.1875,
+        "seconds": 0.08,
+        "reference": "今天天气很好，我们下午去公园散步吧。",
+        "hypothesis": "今天天氣很好,我們下午去公園散步吧"
+      },
+      {
+        "name": "zh-technical",
+        "language": "zh",
+        "error_rate": 0.5652173913043478,
+        "seconds": 0.09,
+        "reference": "请把这个分支推送到远程仓库，然后创建一个合并请求。",
+        "hypothesis": "請把這個分支推送到遠程參股然後創建一個和病性球"
+      }
+    ]
+  }
+}

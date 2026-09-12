@@ -109,18 +109,35 @@ unit: **WER** (words) for space-delimited languages, **CER** (characters) for
 - **`peak RAM` is process RSS, which understates CoreML/ANE models** — the
   weights don't live in this process. Use it to compare models, not to size a Mac.
 
-## Current state (2026-07-19)
+## Current state (2026-09-12, WhisperKit 1.1.0)
 
 Measured with `make bench` on the synthesized corpus, M-series:
 
-| model | err | load | speed | peak RSS |
-|---|---|---|---|---|
-| **large-v3-v20240930_626MB** (default) | **0.0%** | 4.0s | 6.0x realtime | 0.14 GB |
-| small | 3.1% | 48.0s¹ | 14.8x | 0.40 GB |
-| base | 12.8% | 20.0s¹ | 39.7x | 0.15 GB |
-| tiny | 16.2% | 4.3s | 60.2x | 0.11 GB |
+| model | err | speed | peak RSS |
+|---|---|---|---|
+| **large-v3-v20240930_626MB** (default) | **0.7%** | 6.1x realtime | 0.14 GB |
+| small | 3.4% | 14.4x | 0.14 GB |
+| base | 12.0% | 41.7x | 0.11 GB |
+| tiny | 14.9% | 61.6x | 0.11 GB |
 
-¹ first-run download + compile included.
+Load time is omitted deliberately: it's dominated by whether the model is
+already downloaded and ANE-compiled, so it says more about cache state than
+about the model. The same run measured 106.6s for turbo cold and 5.8s warm.
+
+### Read this table with a ±1.3% error bar
+
+Re-running **the same library on the same audio** two months later moved error
+by up to 1.3% in *both* directions (turbo 0.0%→0.7%, tiny 16.2%→14.9%). On a
+7-sample synthesized corpus that is measurement noise, not signal.
+
+The practical consequence: **a bench result is only evidence when compared
+against a control run from the same day**, not against a number in this file.
+That's how the WhisperKit 1.0.0 → 1.1.0 bump was evaluated — control first,
+then the upgrade — and the error rates came out bit-identical across all four
+models (0.7 / 3.4 / 12.0 / 14.9), with speed marginally up on three of four.
+
+Recording real-voice samples would shrink this noise floor and is the single
+highest-value improvement available to this tooling.
 
 The default is the right default: perfect on this corpus, and 6x realtime is
 far below the threshold where push-to-talk feels slow. The smaller models only
