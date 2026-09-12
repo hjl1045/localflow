@@ -35,6 +35,12 @@ final class RecordingOverlay: ObservableObject {
     enum Mode {
         case listening
         case processing
+        /// Shown when the hotkey is pressed while a model is still loading.
+        /// Without it the press is silently dropped: the menu bar icon does
+        /// switch to an hourglass, but the user is typing in another app and
+        /// never sees it — so the app appears broken for the 5-7s a model
+        /// switch takes.
+        case loadingModel
     }
 
     @Published var mode: Mode = .listening
@@ -79,6 +85,19 @@ final class RecordingOverlay: ObservableObject {
         present(.listening)
         level = 0.5 // liven the bars for the preview
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.generation == token else { return }
+            self.hide()
+        }
+    }
+
+    /// Show `mode` briefly, then hide — for a message rather than a session.
+    /// Auto-hides unless a real session takes over in the meantime, which the
+    /// generation token detects.
+    func flash(_ mode: Mode, seconds: TimeInterval = 1.6) {
+        generation += 1
+        let token = generation
+        present(mode)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
             guard let self, self.generation == token else { return }
             self.hide()
         }
@@ -194,6 +213,7 @@ struct RecordingOverlayView: View {
         switch overlay.mode {
         case .listening: waveform(time: time)
         case .processing: transcribing(time: time)
+        case .loadingModel: loadingModel(time: time)
         }
     }
 
@@ -227,6 +247,20 @@ struct RecordingOverlayView: View {
         let wave = (sin(phase - time * 7) + 1) / 2
         let amplitude = 0.15 + CGFloat(min(overlay.level, 1)) * 0.85
         return minBar + (maxBar - minBar) * amplitude * CGFloat(wave)
+    }
+
+    /// Loading a model: the same spinner as transcribing, but captioned —
+    /// this is the one overlay state that has to explain itself, because it
+    /// appears in answer to a key press that otherwise did nothing.
+    @ViewBuilder
+    private func loadingModel(time: TimeInterval) -> some View {
+        HStack(spacing: 7) {
+            spinner(time: time)
+            Text("Loading model…")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.92))
+                .fixedSize()
+        }
     }
 
     /// Transcribing: a quiet line of white dots with a glow travelling through

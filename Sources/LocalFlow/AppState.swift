@@ -262,6 +262,9 @@ final class AppState: ObservableObject {
             startRecording(mode: .toggle)
         } else if status == .recording, recordingMode == .toggle {
             stopAndTranscribe()
+        } else if status == .loadingModel {
+            overlay.flash(.loadingModel)
+            log.notice("toggle during model load — told the user instead of ignoring it")
         } else {
             log.notice("toggle ignored: status=\(String(describing: self.status))")
         }
@@ -269,6 +272,13 @@ final class AppState: ObservableObject {
 
     private func startRecording(mode: RecordingMode) {
         log.notice("startRecording mode=\(String(describing: mode)) status=\(String(describing: self.status))")
+        // A press during a model load has to be answered, not dropped: the
+        // menu bar turns to an hourglass, but the user is in another app and
+        // won't see it, so the hotkey looks broken for the 5-7s a switch takes.
+        if status == .loadingModel {
+            overlay.flash(.loadingModel)
+            return
+        }
         guard status == .idle else { return } // ignore key-repeat and busy states
         do {
             try recorder.start()
