@@ -16,16 +16,9 @@ struct FeedbackView: View {
     @State private var diagnostics: Diagnostics?
     @State private var userDescription = ""
     @State private var includeTranscript = false
+    /// Set only when no mail client answered, which is the one case where the
+    /// window must stay open — to offer Copy/Save and the address instead.
     @State private var mailFailed = false
-    /// True once a draft has been handed to the mail client.
-    ///
-    /// Without this the button reads "Send…" forever, so clicking it again —
-    /// the natural thing to do when the window stays open and nothing visibly
-    /// happened — silently opens a *second* draft. Duplicate reports are worse
-    /// than a missing one: they cost triage time and make one bug look like a
-    /// pattern. Editing the report re-enables it, since that's a genuinely new
-    /// report rather than an impatient second click.
-    @State private var draftOpened = false
 
     private var hasTranscript: Bool { appState.recentTranscripts.first != nil }
 
@@ -89,10 +82,6 @@ struct FeedbackView: View {
         }
         .padding(16)
         .frame(width: 560, height: 640)
-        // Changing what the report says makes it a different report, so let it
-        // be sent again.
-        .onChange(of: userDescription) { draftOpened = false }
-        .onChange(of: includeTranscript) { draftOpened = false }
         .task(id: includeTranscript) {
             diagnostics = await Diagnostics.collect(
                 appState: appState,
@@ -124,19 +113,24 @@ struct FeedbackView: View {
                 if let report { Feedback.save(report) }
             }
             Spacer()
-            if draftOpened {
-                Text("Draft opened — send it from your mail app")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Button(draftOpened ? "Draft opened" : "Send…") {
+            // On success this window closes, so there is no "sent" state to
+            // show and no second click to defend against.
+            //
+            // It deliberately does NOT claim the report was sent: the app hands
+            // a draft to the mail client and never learns what happens next.
+            // Saying "Draft opened" and waiting was a dead end — it waited for
+            // a signal that can't arrive, and left the window sitting there
+            // after the mail had already gone.
+            Button("Send…") {
                 guard let report else { return }
-                let opened = Feedback.openMail(with: report)
-                mailFailed = !opened
-                draftOpened = opened
+                if Feedback.openMail(with: report) {
+                    AppDelegate.closeFeedback()
+                } else {
+                    mailFailed = true
+                }
             }
             .keyboardShortcut(.defaultAction)
-            .disabled(report == nil || draftOpened)
+            .disabled(report == nil)
         }
     }
 }

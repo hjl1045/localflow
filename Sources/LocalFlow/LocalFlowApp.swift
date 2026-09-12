@@ -177,6 +177,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// Closes the report window. Called once the mail draft exists, because at
+    /// that point the window has nothing left to do — see FeedbackView.
+    ///
+    /// Deferred to the next main-loop turn on purpose: the caller is a button
+    /// *inside* this window, and tearing the window down while its own action
+    /// is still on the stack is how you get a use-after-free. The static
+    /// reference is deliberately not cleared either — `showFeedback` replaces
+    /// it on the next open, and dropping the last strong reference here would
+    /// release the window mid-action even with `isReleasedWhenClosed = false`.
+    @MainActor
+    static func closeFeedback() {
+        let window = feedbackWindow
+        DispatchQueue.main.async { window?.close() }
+    }
+
     /// The "your last run crashed" prompt. A short alert rather than the report
     /// window itself, because the app launches at login — an unrequested 640pt
     /// window every time you log in is worse than the bug it's reporting.
