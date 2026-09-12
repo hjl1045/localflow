@@ -21,31 +21,25 @@ import os
 enum Feedback {
     private static let log = Logger(subsystem: "ai.xdlab.LocalFlow", category: "feedback")
 
-    /// Where a report is mailed, chosen by what kind of report it is.
+    /// Where every report is mailed.
     ///
-    /// An email carries only a subject and a body — there is no field that says
-    /// "project: LocalFlow, label: Bug". Linear's one hook for attaching
+    /// One address for crashes and for problems the user noticed themselves —
+    /// they are all bugs, and a second category earned nothing but a second
+    /// thing to keep in sync. The report's own subject already distinguishes a
+    /// crash from a hand-written report.
+    ///
+    /// An email carries only a subject and a body, so there is no field that
+    /// says "project: LocalFlow, label: Bug". Linear's one hook for attaching
     /// properties to incoming mail is a **team template with its own address**,
-    /// so the address itself is the signal, and the app picks it.
+    /// which is what this is — the "LocalFlow crash report" template, filing
+    /// into project LocalFlow with label `Bug`.
     ///
-    /// These are public by necessity — they ship inside the app. That's an
-    /// accepted, reversible risk rather than an oversight: each local part
-    /// carries a random token, so they aren't guessable, and if one is ever
-    /// scraped and spammed, regenerating it in Linear invalidates the old one.
-    /// Rotation procedure: `docs/FEEDBACK.md`.
-    static func intakeAddress(for diagnostics: Diagnostics) -> String {
-        diagnostics.crash == nil ? feedbackIntakeAddress : crashIntakeAddress
-    }
-
-    /// Template "LocalFlow crash report" → project LocalFlow, label `Bug`.
-    static let crashIntakeAddress = "localflow-crash-report-7977588461c1@intake.linear.app"
-
-    /// Still the plain *team* intake address, which files into the team with no
-    /// project and no label. Its template ("LocalFlow feedback" → project
-    /// LocalFlow, label `feedback › general`) exists, but enabling its email
-    /// address is a settings toggle that hasn't been flipped yet. Swap this one
-    /// line when it is — nothing else needs to change.
-    static let feedbackIntakeAddress = "the-autonomes-84537e82dae6@intake.linear.app"
+    /// It is public by necessity — it ships inside the app. That's an accepted,
+    /// reversible risk rather than an oversight: the local part carries a random
+    /// token, so it isn't guessable, and if it's ever scraped and spammed,
+    /// regenerating it in Linear invalidates the old one. Rotation procedure:
+    /// `docs/FEEDBACK.md`.
+    static let intakeAddress = "localflow-crash-report-7977588461c1@intake.linear.app"
 
     /// Mail clients and `NSWorkspace.open` both get unreliable with very long
     /// URLs, and a report that silently fails to open is worse than a short
@@ -73,7 +67,7 @@ enum Feedback {
         guard let subject = encode(diagnostics.subject), let encodedBody = encode(body) else {
             return nil
         }
-        return URL(string: "mailto:\(intakeAddress(for: diagnostics))?subject=\(subject)&body=\(encodedBody)")
+        return URL(string: "mailto:\(intakeAddress)?subject=\(subject)&body=\(encodedBody)")
     }
 
     @MainActor
@@ -140,7 +134,7 @@ enum Feedback {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmm"
         let stamp = formatter.string(from: diagnostics.generatedAt)
-        let kind = diagnostics.crash == nil ? "feedback" : "crash"
+        let kind = diagnostics.crash == nil ? "report" : "crash"
         return "LocalFlow-\(kind)-\(stamp).txt"
     }
 

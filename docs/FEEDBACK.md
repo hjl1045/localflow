@@ -38,27 +38,21 @@ true** — re-check before shipping.
 
 ## Where reports land
 
-Mail sent from the report window goes to a **Linear intake address**, which
-turns the email into an issue with the sender's address attached, so a report is
-answerable. **Which** address depends on the kind of report, because the address
-is the only way to say where an issue belongs:
+Mail sent from the report window goes to a **Linear intake address** for the
+"LocalFlow crash report" template, which turns the email into an issue in the
+**LocalFlow** project labelled **Bug**, with the sender's address attached so a
+report is answerable.
 
-| report | address | files as |
-| -- | -- | -- |
-| crash | `localflow-crash-report-…@intake.linear.app` (template "LocalFlow crash report") | project **LocalFlow**, label **Bug** |
-| feedback | `the-autonomes-…@intake.linear.app` (plain team address) | team only — no project, no label |
+One address for everything. Crashes and problems a user noticed themselves are
+all bugs, so a second category earned nothing but a second thing to keep in
+sync — the subject line already distinguishes them (`LocalFlow crash — …`
+vs `LocalFlow 0.2.1: …`).
 
-An email carries only a subject and a body; there is no field that says
-"project: LocalFlow, label: Bug". Linear's single hook for attaching properties
-to incoming mail is a **team template with its own email address** (Standard
-templates only — Form templates can't have one), so the app chooses the address
-to choose the routing.
-
-The feedback row is still the plain team address only because enabling the
-"LocalFlow feedback" template's email address is a settings toggle that hasn't
-been flipped. The template itself exists, with project LocalFlow and label
-`feedback › general`. When the toggle is on, swap `feedbackIntakeAddress` in
-`Sources/LocalFlow/Feedback.swift` — nothing else changes.
+The address matters because an email carries only a subject and a body; there is
+no field that says "project: LocalFlow, label: Bug". Linear's single hook for
+attaching properties to incoming mail is a **team template with its own email
+address** (Standard templates only — Form templates can't have one), so the
+address *is* the routing.
 
 ### Why not the Linear API
 
@@ -70,30 +64,27 @@ is what Echo Story does — but it means running a service and exposing a public
 endpoint for an app that otherwise makes no off-machine network calls at all.
 Email costs neither and keeps the payload reviewable by the person sending it.
 
-### Rotating an intake address
+### Rotating the intake address
 
-Both addresses ship inside the app, so they are public by necessity. Each local
-part carries a random token, so they aren't guessable — but if one gets scraped
-and spammed:
+The address ships inside the app, so it is public by necessity. Its local part
+carries a random token, so it isn't guessable — but if it gets scraped and
+spammed:
 
 1. Regenerate it in Linear, which invalidates the old address immediately:
-   - team address → Settings → Teams → **The Autonomes** → General → **Create
-     issues by email** → the regenerate button beside the address;
-   - template address → Settings → Teams → **The Autonomes** → Templates → ⋯ on
-     the template → **Configure email address…** → the regenerate button.
-2. Update the matching constant in `Sources/LocalFlow/Feedback.swift`.
+   Settings → Teams → **The Autonomes** → Templates → ⋯ on "LocalFlow crash
+   report" → **Configure email address…** → the regenerate button.
+2. Update `intakeAddress` in `Sources/LocalFlow/Feedback.swift`.
 3. Ship a release. Older installs will mail a dead address, so mention it in
    the release notes.
 
-Turning a toggle off disables that address without deleting the issues it
+Turning the toggle off disables the address without deleting the issues it
 created.
 
-### Adding or changing where a report kind lands
+### Changing where reports land
 
 Create a Standard team template, set its default Project and Labels, enable its
-email address from the ⋯ menu, and point a constant in `Feedback.swift` at it.
-`Feedback.intakeAddress(for:)` is the one place that decides which address a
-report uses.
+email address from the ⋯ menu, and point `Feedback.intakeAddress` at it — that
+constant is the only place the destination is decided.
 
 Two gotchas, both measured 2026-09-12: **Form templates cannot have an email
 address**, and Linear's template editor loses the Labels selection if you close

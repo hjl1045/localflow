@@ -92,7 +92,7 @@ struct Diagnostics {
             return "LocalFlow crash — \(crash.summary)"
         }
         let trimmed = userDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "LocalFlow \(appVersion) feedback" }
+        guard !trimmed.isEmpty else { return "LocalFlow \(appVersion) report" }
         let firstLine = trimmed.split(separator: "\n").first.map(String.init) ?? trimmed
         let clipped = firstLine.count > 72 ? String(firstLine.prefix(72)) + "…" : firstLine
         return "LocalFlow \(appVersion): \(clipped)"
