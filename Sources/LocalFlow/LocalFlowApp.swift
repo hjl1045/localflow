@@ -80,6 +80,9 @@ enum Main {
                         timer.invalidate()
                         let size = NSApp.windows.first { $0.isVisible && $0.contentViewController != nil }?.frame.size
                         print("window survived key + 8 width nudges without an exception — size \(size.map { "\(Int($0.width))×\(Int($0.height))" } ?? "none")")
+                        // What Settings' version row reads, so a release vs dev
+                        // build label can be checked without a screenshot.
+                        print("version shown: LocalFlow \(AppUpdateCheck.displayVersion)")
                         exit(0)
                     }
                 }
@@ -505,7 +508,7 @@ struct SettingsView: View {
             // NSApplicationCrashOnExceptions turns into a crash. Keep modifiers
             // adjacent to the view they style, and don't give this row fixedSize.
             HStack(spacing: 4) {
-                Text("LocalFlow \(AppUpdateCheck.installedVersion)")
+                Text("LocalFlow \(AppUpdateCheck.displayVersion)")
                 // The licenses of the open-source software compiled into this
                 // app. MIT and Apache-2.0 both require these notices to travel
                 // with the binary; this is where they travel. An icon beside the

@@ -34,6 +34,19 @@ NOTARIZED := $(DIST)/notarized/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
 VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Support/Info.plist)
 
+# Only `make zip` produces a release build. Every other bundle — install,
+# install-notarized, run, bench — keeps the release's version number but gets a
+# dev build number, e.g. `6-dev-cf1123f` (plus `-dirty` with uncommitted
+# changes), and Settings shows "LocalFlow 0.2.4 (dev cf1123f)".
+#
+# Why: a local build of `main` used to be indistinguishable from the release it
+# came after. THE-251's crash report said "0.2.2 (build 4)" but came from an
+# unreleased build, and that ambiguity put a false "0.2.2 crashes" claim into
+# the public v0.2.3 release notes.
+RELEASE ?=
+GIT_SHA := $(or $(shell git rev-parse --short HEAD 2>/dev/null),local)
+GIT_DIRTY := $(shell git status --porcelain 2>/dev/null | grep -q . && echo -dirty)
+
 # Prefer a stable Apple Development identity so the code signature (and the
 # TCC Accessibility grant tied to it) survives rebuilds; fall back to ad-hoc.
 SIGN := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/{print $$2; exit}')
@@ -55,6 +68,12 @@ bundle: build $(DIST)
 	rm -rf $(BUNDLE)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
 	cp Support/Info.plist $(CONTENTS)/Info.plist
+	@# Stamp the COPY, never Support/Info.plist, and before codesign.
+	@if [ -z "$(RELEASE)" ]; then \
+		build=$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Support/Info.plist); \
+		/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $$build-dev-$(GIT_SHA)$(GIT_DIRTY)" $(CONTENTS)/Info.plist; \
+		echo "Dev build: $(VERSION) ($$build-dev-$(GIT_SHA)$(GIT_DIRTY)) — only 'make zip' makes a release build"; \
+	fi
 	cp Support/AppIcon.icns $(CONTENTS)/Resources/AppIcon.icns
 	@# Third-party notices, generated from the exact dependency versions this
 	@# build linked. Must happen BEFORE codesign: the file lives inside the
@@ -233,7 +252,10 @@ uninstall-user:
 # `notarize` rather than `bundle`. The artifact IS the notarized bundle — do not
 # re-sign it here, or the stapled ticket stops matching.
 zip: SIGN = $(DEVID)
+zip: RELEASE = 1
 zip: notarize
+	@/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' $(NOTARIZED)/Contents/Info.plist | grep -qv -- '-dev-' \
+		|| { echo "ERROR: release build carries a dev build number — refusing to package"; exit 1; }
 	ditto -c -k --keepParent $(NOTARIZED) $(DIST)/$(APP)-$(VERSION).zip
 	@# Assert the positive conditions on what actually gets published. Ad-hoc
 	@# used to be asserted here for the opposite reason; the checks inverted with
