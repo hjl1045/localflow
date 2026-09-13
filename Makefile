@@ -17,7 +17,7 @@ DIST    := dist.noindex
 BUNDLE  := $(DIST)/$(APP).app
 USERAPPS := $(HOME)/Applications
 
-# Developer ID identity, used ONLY for notarized builds she installs herself.
+# Developer ID identity — used for notarized installs AND public releases (`zip`).
 # Empty until the certificate exists — the notarize target checks and explains.
 DEVID := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/{print $$2; exit}')
 # Keychain profile created by `scripts/setup-notary.sh`.
@@ -216,15 +216,14 @@ uninstall-user:
 
 # Zip the NOTARIZED .app for a GitHub Release. `ditto` preserves the bundle
 # layout, code signature and stapled ticket (plain `zip` can corrupt them).
-# Consumed by the Homebrew cask — see docs/DISTRIBUTION.md.
+# Published as a GitHub Release — see docs/DISTRIBUTION.md §3.
 #
 # Public downloads were ad-hoc signed until 2026-09-12, to keep the developer's
 # identity out of anything strangers could run `codesign -dvvv` on (THE-178).
 # Her call reversed that once the certificate turned out to carry the ORG name,
 # "The Autonomes Technologies LLC", rather than a personal one — so the trade is
 # an organisation name in every download, in exchange for a build that opens by
-# double-clicking: no quarantine dialog, no `xattr` incantation, and a Homebrew
-# cask that works without one.
+# double-clicking: no quarantine dialog, no `xattr` incantation.
 #
 # This costs a notary round-trip per release, which is why it depends on
 # `notarize` rather than `bundle`. The artifact IS the notarized bundle — do not
