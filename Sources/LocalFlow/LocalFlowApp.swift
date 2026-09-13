@@ -14,7 +14,8 @@ enum Main {
     /// saying so — which is exactly what happened when `--check-updates` was
     /// removed along with the companion app.
     private static let knownFlags: Set<String> = [
-        "--diagnostics", "--diagnostics-mail", "--check-models", "--check-app", "--check-updates",
+        "--diagnostics", "--diagnostics-mail", "--crash-file",
+        "--check-models", "--check-app", "--check-updates",
         "--open-settings", "--open-feedback",
         "--transcribe", "--language", "--model", "--clean",
     ]
@@ -34,6 +35,8 @@ enum Main {
             print("  LocalFlow --check-models                           list newer speech models upstream")
             print("  LocalFlow --diagnostics                            print a bug report")
             print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
+            print("            [--crash-file FILE.ips]                  …as a report of that crash")
+            print("  LocalFlow --open-settings | --open-feedback        open that window, exit 0 if it lays out")
             exit(2)
         }
         // Opens a real window through the real code path, runs the run loop long
@@ -134,7 +137,18 @@ enum Main {
         }
         if args.contains("--diagnostics") || args.contains("--diagnostics-mail") {
             let state = await MainActor.run { AppState(live: false) }
-            let crash = CrashReports.newestUnseen()
+            // `--crash-file` renders a report for a specific crash, seen or not —
+            // the launch check only ever offers each one once.
+            let crash: CrashReport?
+            if let index = args.firstIndex(of: "--crash-file") {
+                guard args.count > index + 1, let loaded = CrashReports.load(URL(fileURLWithPath: args[index + 1])) else {
+                    print("FAILED: --crash-file needs a readable .ips path")
+                    exit(1)
+                }
+                crash = loaded
+            } else {
+                crash = CrashReports.newestUnseen()
+            }
             let report = await Diagnostics.collect(appState: state, crash: crash)
             if args.contains("--diagnostics-mail") {
                 let body = Feedback.mailBody(for: report)

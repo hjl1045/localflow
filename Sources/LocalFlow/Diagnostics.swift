@@ -23,6 +23,12 @@ import os
 /// `inject: chars=147`), and os_log redacts interpolated strings as `<private>`
 /// unless they're explicitly marked public. Verified across all six categories
 /// 2026-09-09 — re-check it if you ever log a transcript.
+///
+/// A crash report adds a few error lines from Apple's frameworks in the crashed
+/// process (`crashReason`). Those aren't ours to audit, but the same redaction
+/// applies — the exception fault in the Settings crash arrived as
+/// `NSGenericException: <private>` — and they're capped at three lines, from a
+/// 30-second window, shown in the preview before anything is sent.
 struct Diagnostics {
     var generatedAt = Date()
     var appVersion: String
@@ -42,6 +48,10 @@ struct Diagnostics {
     var status: String
     /// Present only when a crash report was found at launch.
     var crash: CrashReport?
+    /// What the crashed process logged as errors just before it died — the
+    /// crash's *reason*, which the `.ips` doesn't carry. Empty when there's no
+    /// crash, or the log has already rotated those lines away.
+    var crashReason: [String] = []
     /// Present only when the reporter ticked the box.
     var transcript: String?
     var logTail: String
@@ -57,9 +67,14 @@ struct Diagnostics {
         includeTranscript: Bool = false,
         crash: CrashReport? = nil
     ) async -> Diagnostics {
-        let logTail = await Task.detached(priority: .userInitiated) { LogTail.recent() }.value
+        // Both are `log show` subprocesses taking a second or two each, so they
+        // run side by side, off the main actor.
+        async let logTail = Task.detached(priority: .userInitiated) { LogTail.recent() }.value
+        async let crashReason = Task.detached(priority: .userInitiated) {
+            crash.map(LogTail.crashReason(for:)) ?? []
+        }.value
 
-        return Diagnostics(
+        return await Diagnostics(
             appVersion: bundleString("CFBundleShortVersionString"),
             appBuild: bundleString("CFBundleVersion"),
             systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
@@ -76,6 +91,7 @@ struct Diagnostics {
             launchAtLogin: LoginItem.isEnabled,
             status: appState.live ? appState.status.label : "n/a — headless dump",
             crash: crash,
+            crashReason: crashReason,
             transcript: includeTranscript ? appState.recentTranscripts.first?.text : nil,
             logTail: logTail
         )
@@ -113,6 +129,16 @@ struct Diagnostics {
             out += "- File: `\(crash.fileName)`\n"
             out += "- When: \(Self.timestamp.string(from: crash.date))\n"
             out += "- What: \(crash.summary)\n\n"
+            // Reason before location: for the Settings crash of 2026-09-12 the
+            // one AppKit line below named the bug outright, while the stack
+            // only said "somewhere in Auto Layout".
+            out += "**Logged just before it crashed**\n\n"
+            out += crashReason.isEmpty
+                ? "_Nothing — no errors in the 30s before the crash, or the log has rotated._\n\n"
+                : "```\n\(crashReason.joined(separator: "\n"))\n```\n\n"
+            if !crash.stack.isEmpty {
+                out += "**Where**\n\n```\n\(crash.stack.joined(separator: "\n"))\n```\n\n"
+            }
             if includeFullCrash {
                 out += "<details><summary>Full .ips</summary>\n\n```\n\(crash.contents)\n```\n\n</details>\n\n"
             } else {
@@ -203,16 +229,94 @@ enum LogTail {
     private static let timeout: TimeInterval = 10
 
     static func recent() -> String {
-        let process = Process()
-        // Absolute path on purpose: `log` is a common shell alias/function
-        // name, and PATH here is whatever launchd handed the app.
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/log")
-        process.arguments = [
+        let output = run([
             "show",
             "--predicate", #"subsystem == "ai.xdlab.LocalFlow""#,
             "--last", window,
             "--style", "compact",
-        ]
+        ])
+        let lines = output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+            .filter { !$0.hasPrefix("Filtering the log data") && !$0.hasPrefix("Timestamp") }
+        return lines.suffix(maximumLines).joined(separator: "\n")
+    }
+
+    /// Lines kept for a crash's reason, and how much of each.
+    private static let maximumReasonLines = 3
+    private static let maximumReasonLength = 360
+    /// How far back from the crash to look. A crash's own exception message
+    /// lands well under a second before it (0.2s for the Settings crash).
+    private static let reasonWindow: TimeInterval = 30
+
+    /// The error and fault lines the crashed process wrote in its last 30
+    /// seconds — from Apple's frameworks too, not only LocalFlow's own
+    /// subsystem, because that's where an exception's message goes.
+    ///
+    /// Selecting by pid keeps out every other process, including the relaunched
+    /// LocalFlow that's now filing the report. The lines are shown in the
+    /// report preview before anything is sent.
+    static func crashReason(for crash: CrashReport) -> [String] {
+        guard let pid = crash.pid, let capturedAt = crash.capturedAt else { return [] }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss" // `log show` reads local time
+        let output = run([
+            "show",
+            "--start", formatter.string(from: capturedAt.addingTimeInterval(-reasonWindow)),
+            "--end", formatter.string(from: capturedAt.addingTimeInterval(2)),
+            "--predicate", "processIdentifier == \(pid) AND (messageType == error OR messageType == fault)",
+            "--style", "compact",
+        ])
+        return reasonLines(from: output)
+    }
+
+    /// Compact-style `log show` output → one line per entry.
+    ///
+    /// An entry can span several lines: AppKit's layout-loop message continues
+    /// with the window and its size on the next line, and an exception entry is
+    /// followed by a whole backtrace. Continuations are joined onto their entry;
+    /// backtrace frames and bare brackets are dropped (the stack section already
+    /// says where). Repeats — AppKit logs the same message twice — are kept once.
+    static func reasonLines(from output: String) -> [String] {
+        let header = try! NSRegularExpression(
+            pattern: #"^\d{4}-\d{2}-\d{2} (\d{2}:\d{2}:\d{2}\.\d{3}) (\w+)\s+\S+\[\d+:[0-9a-f]+\] (?:(\[[^\]]+\]) )?(.*)$"#
+        )
+        let frame = try! NSRegularExpression(pattern: #"^\s*\d+\s+\S+\s+0x[0-9a-f]+ "#)
+
+        var entries: [(prefix: String, message: String)] = []
+        for raw in output.split(separator: "\n", omittingEmptySubsequences: true).map(String.init) {
+            let range = NSRange(raw.startIndex..., in: raw)
+            if let match = header.firstMatch(in: raw, range: range) {
+                func group(_ i: Int) -> String {
+                    Range(match.range(at: i), in: raw).map { String(raw[$0]) } ?? ""
+                }
+                let prefix = [group(1), group(2), group(3)].filter { !$0.isEmpty }.joined(separator: " ")
+                entries.append((prefix, group(4).trimmingCharacters(in: .whitespaces)))
+            } else if !entries.isEmpty,
+                      frame.firstMatch(in: raw, range: range) == nil,
+                      !["(", ")"].contains(raw.trimmingCharacters(in: .whitespaces)) {
+                entries[entries.count - 1].message += " " + raw.trimmingCharacters(in: .whitespaces)
+            }
+        }
+
+        var seen = Set<String>()
+        let unique = entries.filter { entry in
+            guard entry.message.count > 2 else { return false } // the "(" that opens a backtrace
+            return seen.insert(String(entry.message.prefix(120))).inserted
+        }
+        return unique.suffix(maximumReasonLines).map { entry in
+            let line = "\(entry.prefix) \(entry.message)"
+            return line.count > maximumReasonLength ? String(line.prefix(maximumReasonLength)) + "…" : line
+        }
+    }
+
+    private static func run(_ arguments: [String]) -> String {
+        let process = Process()
+        // Absolute path on purpose: `log` is a common shell alias/function
+        // name, and PATH here is whatever launchd handed the app.
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/log")
+        process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = Pipe() // don't let stderr land in the report
@@ -236,11 +340,6 @@ enum LogTail {
             log.error("log show timed out after \(Int(timeout))s")
         }
 
-        guard let output = String(data: data, encoding: .utf8) else { return "" }
-        let lines = output
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .map(String.init)
-            .filter { !$0.hasPrefix("Filtering the log data") && !$0.hasPrefix("Timestamp") }
-        return lines.suffix(maximumLines).joined(separator: "\n")
+        return String(data: data, encoding: .utf8) ?? ""
     }
 }
