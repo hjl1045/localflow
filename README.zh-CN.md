@@ -170,6 +170,8 @@ ollama pull gemma3:4b
 
 [WhisperKit](https://github.com/argmaxinc/WhisperKit)（在神经网络引擎上跑 Whisper）· [Whisper](https://github.com/openai/whisper) · [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) · [Ollama](https://ollama.com)
 
+这些项目的许可声明随 App 一起分发 —— **设置 → Acknowledgements…** —— 按每次构建实际链接的版本生成，也包括 WhisperKit 内部使用的 Hugging Face [swift-transformers](https://github.com/huggingface/swift-transformers) 代码。
+
 ## 许可
 
 [MIT](LICENSE)

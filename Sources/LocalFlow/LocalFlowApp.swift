@@ -28,6 +28,7 @@ enum Main {
             print("  LocalFlow                                          launch the menu bar app")
             print("  LocalFlow --transcribe FILE [--language xx]")
             print("                              [--model NAME] [--clean]")
+            print("  LocalFlow --check-updates                          what "Check for updates…" would say")
             print("  LocalFlow --check-app                              is a newer LocalFlow released?")
             print("  LocalFlow --check-models                           list newer speech models upstream")
             print("  LocalFlow --diagnostics                            print a bug report")
@@ -420,9 +421,21 @@ struct SettingsView: View {
             // The version was previously visible nowhere in the UI — only
             // inside a bug report — so a user couldn't answer "am I current?"
             // even by hand, let alone read an update prompt against it.
-            Text("LocalFlow \(AppUpdateCheck.installedVersion)")
+            HStack {
+                Text("LocalFlow \(AppUpdateCheck.installedVersion)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                // The licenses of the open-source software compiled into this
+                // app. MIT and Apache-2.0 both require these notices to travel
+                // with the binary; this is where they travel.
+                Button("Acknowledgements…") {
+                    if let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "txt") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+            }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
