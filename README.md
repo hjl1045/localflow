@@ -174,6 +174,8 @@ Otherwise: [open an issue](https://github.com/hjl1045/localflow/issues), or mail
 
 [WhisperKit](https://github.com/argmaxinc/WhisperKit) (Whisper on the Neural Engine) · [Whisper](https://github.com/openai/whisper) · [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) · [Ollama](https://ollama.com)
 
+Their license notices ship inside the app — **Settings → Acknowledgements…** — generated from the exact versions each build links, including code WhisperKit incorporates from Hugging Face's [swift-transformers](https://github.com/huggingface/swift-transformers).
+
 ## License
 
 [MIT](LICENSE)

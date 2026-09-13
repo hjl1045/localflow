@@ -56,6 +56,10 @@ bundle: build $(DIST)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
 	cp Support/Info.plist $(CONTENTS)/Info.plist
 	cp Support/AppIcon.icns $(CONTENTS)/Resources/AppIcon.icns
+	@# Third-party notices, generated from the exact dependency versions this
+	@# build linked. Must happen BEFORE codesign: the file lives inside the
+	@# bundle, and writing it after signing would invalidate the signature.
+	bash scripts/third-party-notices.sh $(CONTENTS)/Resources/THIRD_PARTY_NOTICES.txt
 	cp $(BUILD)/$(APP) $(CONTENTS)/MacOS/$(APP)
 	printf 'APPL????' > $(CONTENTS)/PkgInfo
 	@# SPM resource bundles (KeyboardShortcuts localizations, etc.)
