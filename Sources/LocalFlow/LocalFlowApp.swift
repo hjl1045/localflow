@@ -15,6 +15,7 @@ enum Main {
     /// removed along with the companion app.
     private static let knownFlags: Set<String> = [
         "--diagnostics", "--diagnostics-mail", "--check-models", "--check-app", "--check-updates",
+        "--open-settings", "--open-feedback",
         "--transcribe", "--language", "--model", "--clean",
     ]
 
@@ -34,6 +35,53 @@ enum Main {
             print("  LocalFlow --diagnostics                            print a bug report")
             print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
             exit(2)
+        }
+        // Opens a real window through the real code path, runs the run loop long
+        // enough for layout and the display cycle to happen, then exits 0.
+        //
+        // This is the only way to reproduce layout crashes without a human
+        // clicking: SwiftUI-in-NSWindow constraint exceptions only fire during an
+        // actual display cycle, and NSApplicationCrashOnExceptions (Info.plist)
+        // turns them into a SIGTRAP — so a non-zero exit IS the regression.
+        // Uses AppState(live: false): no hotkeys are registered, so it can't
+        // collide with an installed copy that's running. Run it from the app
+        // bundle so the Info.plist setting applies.
+        if args.contains("--open-settings") || args.contains("--open-feedback") {
+            let openSettings = args.contains("--open-settings")
+            await MainActor.run {
+                let app = NSApplication.shared
+                app.setActivationPolicy(.accessory)
+                let state = AppState(live: false)
+                if openSettings {
+                    AppDelegate.showSettings(appState: state)
+                } else {
+                    AppDelegate.showFeedback(appState: state)
+                }
+                // Force re-layout the way real use does: the window becoming key,
+                // then its width being nudged. A merely-shown window can sit
+                // still and never hit an unstable layout — the real crash needed
+                // the negotiation to run again, which is why an earlier version of
+                // this harness passed on code that crashed for her.
+                app.setActivationPolicy(.regular)
+                app.activate(ignoringOtherApps: true)
+                var nudges = 0
+                Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { timer in
+                    let window = NSApp.windows.first { $0.isVisible && $0.contentViewController != nil }
+                    if let window, nudges < 8 {
+                        window.makeKeyAndOrderFront(nil)
+                        var frame = window.frame
+                        frame.size.width += (nudges % 2 == 0) ? 1 : -1
+                        window.setFrame(frame, display: true)
+                        nudges += 1
+                    } else if nudges >= 8 {
+                        timer.invalidate()
+                        let size = NSApp.windows.first { $0.isVisible && $0.contentViewController != nil }?.frame.size
+                        print("window survived key + 8 width nudges without an exception — size \(size.map { "\(Int($0.width))×\(Int($0.height))" } ?? "none")")
+                        exit(0)
+                    }
+                }
+                app.run()
+            }
         }
         // Exactly what the combined alert would say, without the alert.
         if args.contains("--check-updates") {
@@ -190,6 +238,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window = existing
         } else {
             let hosting = NSHostingController(rootView: SettingsView().environmentObject(appState))
+            // Size the window ONCE from SwiftUI's preferred size, instead of the
+            // default which keeps min/max size constraints in sync with the view.
+            // That continuous sync (`updateWindowContentSizeExtremaIfNecessary`)
+            // is the exact path in the 2026-09-12 crash: an unstable view makes it
+            // request another constraint pass from inside the current one, forever.
+            // The window isn't resizable, so min/max constraints bought nothing.
+            hosting.sizingOptions = .preferredContentSize
             window = NSWindow(contentViewController: hosting)
             window.title = settingsTitle
             window.styleMask = [.titled, .closable]
@@ -218,6 +273,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hosting = NSHostingController(
             rootView: FeedbackView(crash: crash).environmentObject(appState)
         )
+        // Same defense as Settings: same hosting pattern, same crash class.
+        hosting.sizingOptions = .preferredContentSize
         let window = NSWindow(contentViewController: hosting)
         window.title = feedbackTitle
         window.styleMask = [.titled, .closable]
@@ -418,13 +475,23 @@ struct SettingsView: View {
                     launchAtLogin = LoginItem.isEnabled // re-sync if registration failed
                 }
             Text("Hold the push-to-talk key, or tap the hands-free key to start and again to stop. Text is typed at your cursor. Smaller models are faster but less accurate.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             // The version was previously visible nowhere in the UI — only
             // inside a bug report — so a user couldn't answer "am I current?"
             // even by hand, let alone read an update prompt against it.
+            //
+            // ⚠️ This row once crashed Settings (2026-09-12). The version line was
+            // inserted BETWEEN the help text above and its modifiers, so
+            // `.fixedSize(horizontal: false, vertical: true)` silently re-attached
+            // to whatever followed — eventually this HStack, whose Spacer gives it
+            // an unbounded ideal width. Height-follows-width on a width that never
+            // settles is an infinite Update Constraints loop, which
+            // NSApplicationCrashOnExceptions turns into a crash. Keep modifiers
+            // adjacent to the view they style, and don't give this row fixedSize.
             HStack {
                 Text("LocalFlow \(AppUpdateCheck.installedVersion)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 Spacer()
                 // The licenses of the open-source software compiled into this
                 // app. MIT and Apache-2.0 both require these notices to travel
@@ -434,11 +501,9 @@ struct SettingsView: View {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .font(.caption)
             }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(20)
         .frame(width: 460)
