@@ -1,7 +1,8 @@
 # Distributing LocalFlow
 
 LocalFlow is an Apple-Silicon-only, on-device menu-bar app. This covers getting
-it onto another Mac, and (optionally) publishing it via Homebrew.
+it onto another Mac, and publishing a release on GitHub — the one public
+distribution channel.
 
 ## 1. Install on another Mac (build from source) — recommended
 
@@ -19,14 +20,16 @@ Then grant **Microphone + Accessibility** when prompted. The Whisper model
 auto-downloads (~626 MB) on first run; Ollama is optional (`brew install ollama
 && ollama pull gemma3:4b`).
 
-## 2. Copy the prebuilt app
+## 2. Download a release
 
-`make zip` (see below) or copy `dist.noindex/LocalFlow.app`, then on the target:
+The prebuilt route: download `LocalFlow-<version>.zip` from
+[GitHub Releases](https://github.com/hjl1045/localflow/releases/latest), unzip,
+drag `LocalFlow.app` to Applications, and double-click. Releases from v0.2.2 on are
+notarized, so there's no Gatekeeper dialog and nothing to strip.
 
-```sh
-xattr -dr com.apple.quarantine LocalFlow.app   # it's not notarized
-open LocalFlow.app
-```
+Don't copy `dist.noindex/LocalFlow.app` to another Mac instead — that's the
+Apple-Development-signed local build, not the notarized one, so a quarantined copy
+of it *will* be blocked.
 
 ## 2b. Managed / work Macs — install without touching `/Applications`
 
@@ -53,8 +56,8 @@ one class of problem and no others.
 | Symptom | Does `install-user` help? |
 |---|---|
 | Needs an admin password to install; IT watches writes to `/Applications` | **Yes** — nothing outside `$HOME` is written |
-| "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No**, and since 2026-09-12 it shouldn't happen at all — release artifacts are notarized and stapled, so a quarantined download passes Gatekeeper. **v0.2.1 and earlier are ad-hoc signed** and do show it — the decision came after v0.2.1 shipped, so the first notarized artifact is the next release. On those: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`, or upgrade |
-| "cannot be opened because the developer cannot be verified" | **No** — and fixed for releases after v0.2.1. v0.2.1 and earlier are ad-hoc signed and do show this: same `xattr` fix, or build from source |
+| "LocalFlow is damaged and can't be opened" after copying a **downloaded** zip | **No**, and since 2026-09-12 it shouldn't happen at all — release artifacts are notarized and stapled, so a quarantined download passes Gatekeeper. **v0.2.1 and earlier are ad-hoc signed** and do show it; v0.2.2 is the first notarized release. On those: `xattr -dr com.apple.quarantine <path>/LocalFlow.app`, or upgrade |
+| "cannot be opened because the developer cannot be verified" | **No** — and fixed from v0.2.2. v0.2.1 and earlier are ad-hoc signed and do show this: same `xattr` fix, or build from source |
 | MDM policy requiring notarized / allow-listed apps (Jamf, Santa, CrowdStrike…) | **No** — the policy is about the signature, not the path. Use `make install-notarized-user` instead (§2c), or have IT allow-list it |
 | Microphone or Accessibility toggle won't stick, or the app isn't offered in System Settings | **No** — that's a managed **PPPC** profile. Only IT can grant it |
 
@@ -91,8 +94,8 @@ make install-notarized           # → /Applications   (the normal one)
 make install-notarized-user      # → ~/Applications  (managed Mac that won't take /Applications)
 ```
 
-Both sign with Developer ID + hardened runtime, notarize, staple, and install the
-companion app alongside. **Install one or the other, never both** — two copies of
+Both sign with Developer ID + hardened runtime, notarize, staple, and install.
+**Install one or the other, never both** — two copies of
 the same bundle id leave LaunchServices and TCC unable to tell which one a
 permission grant belongs to.
 
@@ -117,8 +120,8 @@ frictionless install looked mutually exclusive.
 The organisation enrollment dissolved most of that. The certificate reads
 **`Developer ID Application: The Autonomes Technologies LLC`**, not a personal
 name or email, so what a downloader learns is the org — which is already public.
-Weighed against a first launch that needs no `xattr` incantation and a Homebrew
-cask that finally works, the trade went the other way:
+Weighed against a first launch that needs no `xattr` incantation, the trade went
+the other way:
 
 | | signature | identity visible to a downloader |
 |---|---|---|
@@ -212,111 +215,63 @@ from System Settings > Privacy & Security > **Microphone** and > **Accessibility
 with the − button, then re-add it. A stale entry can display as granted while
 the API still reports untrusted, so remove-then-re-add rather than toggling.
 
-## 3. Publish via Homebrew (Cask)
+## 3. Publish a release on GitHub
 
-Because it's a GUI `.app`, Homebrew distribution is a **Cask**, not a formula.
-A cask downloads a prebuilt artifact from a URL and drops the app in
-`/Applications`.
+**GitHub Releases is the only public distribution channel** (decided 2026-09-12).
+People download the zip, unzip it, and drag the app to Applications — and since
+v0.2.2 that works by double-clicking, because releases are notarized.
 
-### Prerequisites (important)
-
-- **A public download URL.** Homebrew can't authenticate to a private repo's
-  release assets. The repo is public, so release assets are directly
-  downloadable — no extra work.
-- **Apple Silicon only** — the cask should declare `depends_on arch: :arm64`.
-- **Notarization is the real blocker.** See the next section: without it, a cask
-  install is *worse* than building from source, and as of Homebrew 6 there is no
-  longer a supported flag to work around it.
-
-### The quarantine problem — solved 2026-09-12
-
-This used to be the reason not to publish a cask. Release artifacts were ad-hoc
-signed and unnotarized, so Gatekeeper blocked the downloaded app on first
-launch, and the advice everyone repeats — `brew install --cask --no-quarantine`
-— **does not work, because that flag no longer exists** (measured 2026-07-19,
-Homebrew 6.0.11):
-
-```
-$ brew install --cask --no-quarantine localflow
-Error: invalid option: --no-quarantine
-```
-
-A cask user therefore had to run `xattr -dr com.apple.quarantine` by hand, which
-is a strictly worse first run than building from source.
-
-**Releases are now notarized and stapled**, so a quarantined download passes
-Gatekeeper and opens on a double-click. The blocker is gone and a cask is worth
-publishing; the routes below are no longer hypothetical. Keep in mind:
-
-- the ticket must be **stapled**, not merely notarized — stapling is what makes
-  the check work offline, and `make zip` asserts it;
-- the cask's `sha256` changes with every release, and a stale one makes installs
-  fail. Refresh it whenever you cut one (see the release checklist in the
-  [FEEDBACK] and [Appendix] sections).
-
-### Route A — your own tap (the path, when you do publish)
-
-You control it end-to-end; users don't need access to the main repo.
-
-1. **Cut a release** with the artifact attached:
+1. Bump `CFBundleShortVersionString` and the integer `CFBundleVersion` in
+   `Support/Info.plist`:
    ```sh
-   make zip                       # -> dist.noindex/LocalFlow-<version>.zip, notarized + stapled
-   shasum -a 256 dist.noindex/LocalFlow-*.zip
-   gh release create v0.2.2 dist.noindex/LocalFlow-0.2.2.zip --title "LocalFlow v0.2.1" --notes "…"
+   /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 0.2.3' Support/Info.plist
+   /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 5' Support/Info.plist
    ```
-   (For hjl1045 repos, prefix `gh` with `GH_TOKEN="$(gh auth token --user hjl1045)"`.)
-2. **Create a tap repo** named `homebrew-localflow` — the `homebrew-` prefix is
-   required: `hjl1045/homebrew-localflow`.
-3. Add `Casks/localflow.rb`:
-   ```ruby
-   cask "localflow" do
-     version "0.2.2"
-     sha256 "6eb13f2370b9c00a935052ce1bb4853e88699b014b6ce958f1342a5799aff005"
-
-     url "https://github.com/hjl1045/localflow/releases/download/v#{version}/LocalFlow-#{version}.zip"
-     name "LocalFlow"
-     desc "Fully-local, on-device dictation for Apple Silicon"
-     homepage "https://github.com/hjl1045/localflow"
-
-     depends_on arch: :arm64
-     depends_on macos: ">= :sonoma"   # LSMinimumSystemVersion 14.0
-
-     app "LocalFlow.app"
-
-     caveats <<~EOS
-       LocalFlow is not notarized, so macOS blocks it on first launch:
-         xattr -dr com.apple.quarantine /Applications/LocalFlow.app
-       Then grant Microphone and Accessibility when prompted.
-     EOS
-
-     zap trash: [
-       "~/Library/Preferences/ai.xdlab.LocalFlow.plist",
-     ]
-   end
-   ```
-   The `caveats` block is what makes this survivable — Homebrew prints it after
-   install, so the user is told about the quarantine step instead of hitting a
-   "damaged app" dialog with no explanation.
-4. **Install from the tap:**
+2. Check the notary credential first — it has vanished before, and recovery needs
+   the Apple ID app-specific password:
    ```sh
-   brew tap hjl1045/localflow
-   brew install --cask localflow          # or: brew install --cask hjl1045/localflow/localflow
-   xattr -dr com.apple.quarantine /Applications/LocalFlow.app
+   xcrun notarytool history --keychain-profile localflow-notary \
+     --keychain ~/Library/Keychains/login.keychain-db >/dev/null && echo ok
    ```
-5. **Each update:** `make zip`, cut the release, then bump `version` + `sha256`
-   in the cask. The sha256 must match the new artifact or installs fail.
+3. Build the artifact — notarized, stapled, with its dSYM:
+   ```sh
+   make zip
+   ```
+4. Publish **both** files:
+   ```sh
+   GH_TOKEN="$(gh auth token --user hjl1045)" gh release create v0.2.3 \
+     dist.noindex/LocalFlow-0.2.3.zip dist.noindex/LocalFlow-0.2.3.dSYM.zip \
+     --title "v0.2.3 — …" --notes-file notes.md --latest
+   ```
+5. **Verify it as a stranger receives it**, not from the build tree: download the
+   published zip, confirm its sha256 matches what you built, extract it, and run
+   `spctl -a -vv -t install` on the result. Reading `dist.noindex/` proves nothing
+   about what downloaders get.
+6. Reinstall locally with `make install-notarized`, or `/Applications` keeps
+   reporting the old version.
 
-### Route B — official homebrew-cask
+Publishing a release is also what makes the in-app **Check for updates…** offer
+it to everyone on an older version.
 
-Submit a PR to `Homebrew/homebrew-cask`. Higher bar: notarized, stable
-versioned releases, some notability, and review. Overkill unless you're
-distributing widely. Route A is the pragmatic choice.
+### Why not Homebrew
 
-### Reality check
+Considered and declined on 2026-09-12.
 
-For your *own* Macs, **build-from-source (section 1) is simpler than Homebrew** —
-no releases, no notarization, no public repo. Homebrew mainly pays off when
-sharing with people who won't build from source.
+**The official `homebrew-cask` repository is closed to LocalFlow for now.** Its
+notability audit (`brew audit --new`, in `Library/Homebrew/utils/shared_audits.rb`)
+requires ≥75 stars **or** ≥30 forks **or** ≥30 watchers, and **triples** those
+thresholds for a self-submitted app — so ≥225 stars. At the time LocalFlow had
+0 / 0 / 0. That is an automatic rejection, not a review judgment.
+
+**A personal tap** (`hjl1045/homebrew-localflow`) has no notability rule and would
+have worked, but she chose not to maintain one: it's a second public repository,
+and a pinned `version` + `sha256` that must be bumped on every release or installs
+break. GitHub Releases alone carries none of that upkeep.
+
+Worth knowing if this is ever revisited: `brew install --cask --no-quarantine`
+**no longer exists** (measured 2026-07-19, Homebrew 6.0.11), so an un-notarized
+cask used to require a manual `xattr` step. Notarized releases removed that
+problem, which is the only thing that would make a cask worth reconsidering.
 
 ## Appendix — `make zip` (release artifact)
 
@@ -327,7 +282,7 @@ hardened-runtime and stapled. It emits **two** files:
 
 | File | Upload to the Release? | Why |
 | -- | -- | -- |
-| `dist.noindex/LocalFlow-<version>.zip` | yes | the app — Developer ID, notarized, stapled; the cask's `sha256` is printed after it's written |
+| `dist.noindex/LocalFlow-<version>.zip` | yes | the app — Developer ID, notarized, stapled; its `sha256` is printed after it's written |
 | `dist.noindex/LocalFlow-<version>.dSYM.zip` | **yes** | without it, a crash report from this build is unreadable |
 
 The dSYM matters because the release build is optimized: symbol names exist
