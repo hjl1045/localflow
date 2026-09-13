@@ -499,22 +499,28 @@ struct SettingsView: View {
             // ⚠️ This row once crashed Settings (2026-09-12). The version line was
             // inserted BETWEEN the help text above and its modifiers, so
             // `.fixedSize(horizontal: false, vertical: true)` silently re-attached
-            // to whatever followed — eventually this HStack, whose Spacer gives it
-            // an unbounded ideal width. Height-follows-width on a width that never
-            // settles is an infinite Update Constraints loop, which
+            // to whatever followed — eventually this HStack, whose Spacer then gave
+            // it an unbounded ideal width. Height-follows-width on a width that
+            // never settles is an infinite Update Constraints loop, which
             // NSApplicationCrashOnExceptions turns into a crash. Keep modifiers
             // adjacent to the view they style, and don't give this row fixedSize.
-            HStack {
+            HStack(spacing: 4) {
                 Text("LocalFlow \(AppUpdateCheck.installedVersion)")
-                Spacer()
                 // The licenses of the open-source software compiled into this
                 // app. MIT and Apache-2.0 both require these notices to travel
-                // with the binary; this is where they travel.
-                Button("Acknowledgements…") {
+                // with the binary; this is where they travel. An icon beside the
+                // version rather than a full-size button: she found the button
+                // too prominent for something almost nobody opens.
+                Button {
                     if let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "txt") {
                         NSWorkspace.shared.open(url)
                     }
+                } label: {
+                    Image(systemName: "info.circle")
                 }
+                .buttonStyle(.borderless)
+                .help("Acknowledgements — open-source licenses")
+                .accessibilityLabel("Acknowledgements")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
