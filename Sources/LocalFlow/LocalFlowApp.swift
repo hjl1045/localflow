@@ -28,7 +28,7 @@ enum Main {
             print("  LocalFlow                                          launch the menu bar app")
             print("  LocalFlow --transcribe FILE [--language xx]")
             print("                              [--model NAME] [--clean]")
-            print("  LocalFlow --check-updates                          what "Check for updates…" would say")
+            print("  LocalFlow --check-updates                          what “Check for updates…” would say")
             print("  LocalFlow --check-app                              is a newer LocalFlow released?")
             print("  LocalFlow --check-models                           list newer speech models upstream")
             print("  LocalFlow --diagnostics                            print a bug report")
