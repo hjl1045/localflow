@@ -115,4 +115,15 @@ enum AppUpdateCheck {
     static var installedVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
     }
+
+    /// What Settings shows: "0.2.4" for a release, "0.2.4 (dev cf1123f)" for
+    /// any other build. The Makefile stamps non-release bundles with a
+    /// `<build>-dev-<commit>` build number, so a local build of `main` can't be
+    /// mistaken for the release it shares a version number with. Version
+    /// comparisons keep using `installedVersion`.
+    static var displayVersion: String {
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        guard let marker = build.range(of: "-dev-") else { return installedVersion }
+        return "\(installedVersion) (dev \(build[marker.upperBound...]))"
+    }
 }

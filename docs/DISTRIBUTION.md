@@ -247,8 +247,18 @@ v0.2.2 that works by double-clicking, because releases are notarized.
    published zip, confirm its sha256 matches what you built, extract it, and run
    `spctl -a -vv -t install` on the result. Reading `dist.noindex/` proves nothing
    about what downloaders get.
-6. Reinstall locally with `make install-notarized`, or `/Applications` keeps
-   reporting the old version.
+6. Reinstall locally **from the published zip** (quit LocalFlow, replace
+   `/Applications/LocalFlow.app` with the extracted copy). Your copy is then
+   byte-identical to what downloaders get, and Settings reads the plain release
+   version.
+
+**Release vs dev builds.** Only `make zip` makes a release build. Every other
+target (`install`, `install-notarized`, `run`, `bench`) keeps the release's
+version number but stamps the bundle with a dev build number, such as
+`6-dev-cf1123f` (plus `-dirty` with uncommitted changes). Settings then shows
+"LocalFlow 0.2.4 (dev cf1123f)", and crash reports carry the same build number.
+So a local build of `main` can't be mistaken for the release it shares a
+version with. `make zip` refuses to package a bundle carrying a dev build number.
 
 Publishing a release is also what makes the in-app **Check for updates…** offer
 it to everyone on an older version.
