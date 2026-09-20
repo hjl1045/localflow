@@ -18,6 +18,7 @@ enum Main {
         "--check-models", "--check-app", "--check-updates",
         "--open-settings", "--open-feedback",
         "--transcribe", "--language", "--model", "--clean",
+        "--silence-selftest",
     ]
 
     static func main() async {
@@ -33,6 +34,7 @@ enum Main {
             print("  LocalFlow --check-updates                          what “Check for updates…” would say")
             print("  LocalFlow --check-app                              is a newer LocalFlow released?")
             print("  LocalFlow --check-models                           list newer speech models upstream")
+            print("  LocalFlow --silence-selftest                       check the hands-free auto-stop rule")
             print("  LocalFlow --diagnostics                            print a bug report")
             print("  LocalFlow --diagnostics-mail                       print the emailed form of one")
             print("            [--crash-file FILE.ips]                  …as a report of that crash")
@@ -88,6 +90,13 @@ enum Main {
                 }
                 app.run()
             }
+        }
+        // The hands-free auto-stop decision, run against synthetic level
+        // traces. The live rule only happens in front of a microphone, and its
+        // dangerous failure — cutting someone off mid-sentence — is precisely
+        // the one you can't notice by testing it once yourself.
+        if args.contains("--silence-selftest") {
+            exit(SilenceSelfTest.run() ? 0 : 1)
         }
         // Exactly what the combined alert would say, without the alert.
         if args.contains("--check-updates") {
@@ -392,6 +401,11 @@ struct MenuContent: View {
         if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleDictation) {
             Text("Tap \(shortcut.description) for hands-free")
         }
+        // Only while there's something to cancel — esc is claimed for exactly
+        // that long, so advertising it at other times would be a lie.
+        if appState.status.isSession {
+            Text("Press esc to cancel")
+        }
         if !appState.recentTranscripts.isEmpty {
             Divider()
             Menu("Recent transcripts") {
@@ -464,6 +478,13 @@ struct SettingsView: View {
                     Text(model.name).tag(model.id)
                 }
             }
+            // Hands-free only: push-to-talk already ends when you let go, so
+            // there is nothing here for it to rescue.
+            Picker("Stop hands-free when silent:", selection: $appState.silenceTimeout) {
+                ForEach(AppState.silenceTimeouts, id: \.seconds) { option in
+                    Text(option.name).tag(option.seconds)
+                }
+            }
             Picker("Listening bar:", selection: $appState.overlayPosition) {
                 ForEach(OverlayPosition.allCases) { pos in
                     Text(pos.displayName).tag(pos)
@@ -491,7 +512,7 @@ struct SettingsView: View {
                     LoginItem.setEnabled(newValue)
                     launchAtLogin = LoginItem.isEnabled // re-sync if registration failed
                 }
-            Text("Hold the push-to-talk key, or tap the hands-free key to start and again to stop. Text is typed at your cursor. Smaller models are faster but less accurate.")
+            Text("Hold the push-to-talk key, or tap the hands-free key to start and again to stop. Press esc to throw a dictation away instead of pasting it. Text is typed at your cursor. Smaller models are faster but less accurate.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

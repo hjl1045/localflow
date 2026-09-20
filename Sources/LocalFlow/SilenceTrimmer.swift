@@ -30,6 +30,28 @@ enum SilenceTrimmer {
     /// rather than risk the edit for a rounding error's worth of silence.
     private static let minWorthTrimming = 4_800 // 300 ms
 
+    /// Whether a recording contains anything that stands out from its own
+    /// room — the question "should this be transcribed at all?", asked of a
+    /// hands-free session that ended itself.
+    ///
+    /// Deliberately NOT the percentile-vs-percentile test `trimTrailingSilence`
+    /// uses. That one compares the loud 5% against the quiet 10%, which works
+    /// on a push-to-talk take that is mostly speech. A session that auto-stops
+    /// is mostly *waiting*: two seconds of speech in a minute of room is 3% of
+    /// the frames, so the 95th percentile is just more room and the speech
+    /// vanishes into the distribution. What survives that is a run test —
+    /// something clearly above the room, sustained long enough to be a
+    /// syllable, anywhere in the recording.
+    static func containsSpeech(_ samples: [Float]) -> Bool {
+        let energies = frameEnergies(samples)
+        guard energies.count > minSpeechFrames else { return false }
+        let room = energies.sorted()[energies.count / 10]
+        // The absolute term matters for digital silence, where `room` is 0 and
+        // a relative bar would let a single stray sample count as speech.
+        let bar = max(room * 2, 0.005)
+        return lastSustainedFrame(energies, above: bar) != nil
+    }
+
     static func trimTrailingSilence(_ samples: [Float]) -> [Float] {
         let energies = frameEnergies(samples)
         guard energies.count > minSpeechFrames,

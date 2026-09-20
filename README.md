@@ -17,7 +17,8 @@ It's fast enough to use all day — transcription starts the moment you release 
 ## What it does
 
 - **Push-to-talk** — hold a hotkey, speak, release. Text is pasted at the cursor. Both hotkeys are recorded in Settings; pick combinations nothing else on your Mac has claimed.
-- **Hands-free mode** — tap a second hotkey to start, tap again to stop, for longer dictation.
+- **Hands-free mode** — tap a second hotkey to start, tap again to stop, for longer dictation. If you forget the second tap, the session ends itself once the room has been quiet long enough (30 s by default; 15/30/60 s or never, in Settings). "Quiet" is measured against your actual room, not a fixed level, so a fan or a vacuum running in the background doesn't keep the session alive forever — it only needs your voice to be roughly twice the level of whatever else is running. A session nobody ever spoke into is thrown away rather than transcribed.
+- **Esc cancels** — changed your mind mid-sentence, or the wrong window is focused? Press <kbd>esc</kbd> and the dictation is dropped: the audio while recording, the text while it's still being transcribed or cleaned. Nothing reaches your cursor. Esc is only claimed for as long as a dictation is actually running, so it behaves normally everywhere else.
 - **Multilingual** — the language is auto-detected by default, or pin one of 12 in Settings (en, zh, es, fr, de, ja, ko, pt, ru, it, hi, ar). Mixed Chinese/English speech works well. The underlying Whisper model covers many more languages, but accuracy varies a lot between them and only English and Chinese are measured here — see [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md).
 - **Optional AI cleanup** — a local LLM fixes punctuation, removes filler words ("um", "uh"), and resolves false starts. Also fully offline.
 - **Nothing from the silence** — you stop talking a beat before you let go of the key, and Whisper narrates that gap: sometimes as an annotation (`[BLANK_AUDIO]`, `*music*`, `[laughter]`), sometimes as a word it invents outright (`Thank you.`). The trailing silence is trimmed off the audio before the model sees it, and any annotation that still gets through is stripped before the text reaches your cursor.
@@ -81,6 +82,8 @@ macOS will prompt for two, both required:
 2. Hold <kbd>⌃</kbd><kbd>⌘</kbd><kbd>M</kbd> (the default — change it in Settings), speak, release.
 3. Your words appear at the cursor.
 
+For a longer stretch, tap <kbd>⇧</kbd><kbd>⌘</kbd><kbd>K</kbd> instead: it records until you tap again, or until the room goes quiet. <kbd>esc</kbd> throws the dictation away at any point before it lands.
+
 Menu-bar icon → **Settings…** to change hotkeys, pick a language or model, move the waveform pill, enable AI cleanup, or launch at login.
 
 ### AI cleanup (optional)
@@ -124,6 +127,7 @@ hotkey up   ──► WhisperKit large-v3-turbo (Neural Engine) ──► raw tr
 | `Transcriber.swift` | WhisperKit wrapper, language and decoding options |
 | `OllamaCleaner.swift` | local LLM formatting pass (never blocks dictation) |
 | `TextInjector.swift` | clipboard-preserving paste-at-cursor |
+| `SilenceWatchdog.swift` | ends a hands-free session that has gone quiet |
 | `RecordingOverlay.swift` | floating waveform pill |
 | `LocalFlowApp.swift` | menu-bar UI, Settings window, headless test CLI |
 
@@ -131,6 +135,12 @@ Headless pipeline test, no mic or UI:
 
 ```sh
 ./dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow --transcribe audio.wav [--language es] [--clean]
+```
+
+The hands-free auto-stop rule has its own headless check — it runs the decision against synthetic level traces, including the ones where stopping would be wrong (a quiet speaker, a long thinking pause, a room too noisy to judge):
+
+```sh
+./dist.noindex/LocalFlow.app/Contents/MacOS/LocalFlow --silence-selftest
 ```
 
 ## Docs

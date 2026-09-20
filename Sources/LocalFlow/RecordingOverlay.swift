@@ -41,6 +41,14 @@ final class RecordingOverlay: ObservableObject {
         /// never sees it — so the app appears broken for the 5-7s a model
         /// switch takes.
         case loadingModel
+        /// Esc was pressed. Shown for a beat on the way out, because a pill
+        /// that simply vanishes mid-dictation reads as a crash, not a cancel.
+        case cancelled
+        /// A hands-free session ended itself and there was nothing in it worth
+        /// transcribing. Distinct from `cancelled` on purpose: "Cancelled"
+        /// claims the user did it, and the difference between "I pressed esc"
+        /// and "it couldn't hear me" is the whole diagnosis.
+        case noSpeech
     }
 
     @Published var mode: Mode = .listening
@@ -214,6 +222,8 @@ struct RecordingOverlayView: View {
         case .listening: waveform(time: time)
         case .processing: transcribing(time: time)
         case .loadingModel: loadingModel(time: time)
+        case .cancelled: dismissed("xmark", "Cancelled")
+        case .noSpeech: dismissed("mic.slash", "No speech")
         }
     }
 
@@ -260,6 +270,28 @@ struct RecordingOverlayView: View {
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.92))
                 .fixedSize()
+        }
+    }
+
+    /// A session ending with nothing to paste: a symbol, captioned when the
+    /// pill is lying horizontally and there's room for the word. The vertical
+    /// pill is 40 pt wide, so it gets the mark alone rather than text spilling
+    /// out of its own panel.
+    @ViewBuilder
+    private func dismissed(_ symbol: String, _ caption: String) -> some View {
+        if overlay.position.isVertical {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+        } else {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(caption)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .fixedSize()
+            }
+            .foregroundStyle(.white.opacity(0.9))
         }
     }
 

@@ -17,6 +17,10 @@ extension KeyboardShortcuts.Name {
     static let pushToTalk = Self("pushToTalk", default: .init(.m, modifiers: [.control, .command]))
     /// Tap once to start hands-free recording, tap again to stop.
     static let toggleDictation = Self("toggleDictation", default: .init(.k, modifiers: [.shift, .command]))
+    /// Esc, to abandon the session in flight. Registered only *while* one is
+    /// running — a bare Escape claimed globally would swallow the key for every
+    /// app on the Mac, which is why it isn't re-recordable in Settings either.
+    static let cancelDictation = Self("cancelDictation", default: .init(.escape))
 }
 
 /// A recent dictation kept in memory (this session only) so the text is
@@ -52,6 +56,16 @@ final class AppState: ObservableObject {
             case .transcribing: "Transcribing…"
             case .cleaning: "Cleaning up…"
             case .error: "Error"
+            }
+        }
+
+        /// True while a dictation is in flight — recording, or working on what
+        /// was recorded. Exactly the states Esc cancels, and exactly when the
+        /// Esc hotkey is claimed.
+        var isSession: Bool {
+            switch self {
+            case .recording, .transcribing, .cleaning: true
+            default: false
             }
         }
 
@@ -93,7 +107,18 @@ final class AppState: ObservableObject {
         ("Tiny (fastest)", "tiny"),
     ]
 
-    @Published var status: Status = .loadingModel
+    /// Auto-stop choices for hands-free: how long the room may stay quiet
+    /// before the session ends itself. 0 = never, the behaviour before this.
+    static let silenceTimeouts: [(name: String, seconds: Double)] = [
+        ("Never", 0), ("After 15 seconds", 15), ("After 30 seconds", 30), ("After 60 seconds", 60),
+    ]
+
+    @Published var status: Status = .loadingModel {
+        didSet {
+            guard status.isSession != oldValue.isSession else { return }
+            syncCancelHotkey()
+        }
+    }
     /// Bumped when the user records a new shortcut so the menu bar's
     /// "Hold X to dictate" labels re-render with the current keys (they're
     /// otherwise built once and never re-read `KeyboardShortcuts.getShortcut`).
@@ -121,6 +146,10 @@ final class AppState: ObservableObject {
             reloadModel()
         }
     }
+    /// Seconds of silence that end a hands-free session on their own.
+    @Published var silenceTimeout: Double {
+        didSet { UserDefaults.standard.set(silenceTimeout, forKey: "silenceTimeoutSeconds") }
+    }
     @Published var overlayPosition: OverlayPosition {
         didSet {
             UserDefaults.standard.set(overlayPosition.rawValue, forKey: "overlayPosition")
@@ -137,7 +166,14 @@ final class AppState: ObservableObject {
     private let recorder = AudioRecorder()
     private let transcriber = Transcriber()
     private let overlay = RecordingOverlay()
+    private let watchdog = SilenceWatchdog()
     private var recordingMode: RecordingMode = .pushToTalk
+    /// Bumped whenever a session starts or is abandoned, so work already in
+    /// flight when Esc landed can tell its result is no longer wanted. Without
+    /// it a cancelled transcription would still arrive at the cursor a second
+    /// later — the one outcome the key exists to prevent.
+    private var sessionID = 0
+    private var transcriptionTask: Task<Void, Never>?
 
     /// False only in the `--diagnostics` dump, so a report can say so rather
     /// than presenting an initial-state placeholder as the real status.
@@ -152,10 +188,15 @@ final class AppState: ObservableObject {
         cleanupEnabled = UserDefaults.standard.bool(forKey: "cleanupEnabled")
         languageCode = UserDefaults.standard.string(forKey: "languageCode") ?? "auto"
         modelName = UserDefaults.standard.string(forKey: "modelName") ?? Transcriber.defaultModel
+        // `object(forKey:)` rather than `double(forKey:)`: an unset key reads
+        // as 0, which is the "never" choice, so a first run would silently opt
+        // out of the default instead of taking it.
+        silenceTimeout = UserDefaults.standard.object(forKey: "silenceTimeoutSeconds") as? Double ?? 30
         overlayPosition = OverlayPosition(rawValue: UserDefaults.standard.string(forKey: "overlayPosition") ?? "") ?? .bottomCenter
         overlay.position = overlayPosition
         recorder.onLevel = { [weak self] level in
             self?.overlay.setLevel(level)
+            self?.watchdog.note(level: level)
         }
         guard live else { return }
         registerHotkey()
@@ -245,6 +286,33 @@ final class AppState: ObservableObject {
         KeyboardShortcuts.onKeyDown(for: .toggleDictation) { [weak self] in
             self?.toggleDictation()
         }
+        KeyboardShortcuts.onKeyDown(for: .cancelDictation) { [weak self] in
+            self?.cancelSession()
+        }
+        // `onKeyDown` registers it; nothing is dictating yet, so hand Esc back
+        // to the rest of the Mac until something is.
+        KeyboardShortcuts.disable(.cancelDictation)
+    }
+
+    /// Claim Esc for the length of a session and give it straight back, so a
+    /// bare Escape isn't swallowed system-wide the rest of the time.
+    ///
+    /// Deferred to the next main-loop turn, and written to converge on whatever
+    /// `status` says *then* rather than to apply a remembered transition. The
+    /// reason is the cancel path: it runs inside the Carbon handler for this
+    /// very hot key, and `UnregisterEventHotKey` from inside its own callback
+    /// is not somewhere to find out we were wrong. Re-reading the state also
+    /// makes an enable that overtakes a pending disable harmless.
+    private func syncCancelHotkey() {
+        guard live else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if status.isSession {
+                KeyboardShortcuts.enable(.cancelDictation)
+            } else {
+                KeyboardShortcuts.disable(.cancelDictation)
+            }
+        }
     }
 
     /// Push-to-talk release: only stops a recording that push-to-talk started.
@@ -282,13 +350,62 @@ final class AppState: ObservableObject {
         guard status == .idle else { return } // ignore key-repeat and busy states
         do {
             try recorder.start()
+            sessionID &+= 1
             recordingMode = mode
             status = .recording
             overlay.show(.listening)
+            // Push-to-talk is already bounded by the key being held; only the
+            // hands-free session can be left running by mistake.
+            if mode == .toggle, silenceTimeout > 0 {
+                watchdog.start(timeout: silenceTimeout) { [weak self] in
+                    self?.silenceElapsed()
+                }
+            }
         } catch {
             log.error("mic start failed: \(error.localizedDescription)")
             status = .error("Mic start failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Esc: abandon this session. While recording that discards the audio;
+    /// while transcribing or cleaning it discards the text, which is the case
+    /// that actually matters — a cancelled dictation must never still land at
+    /// the cursor a second later.
+    ///
+    /// Not private: it's also how the menu bar could offer the same thing, and
+    /// it's the single place a session is torn down.
+    func cancelSession(reason: String = "esc", notice: RecordingOverlay.Mode = .cancelled) {
+        guard status.isSession else { return }
+        log.notice("cancelled (\(reason, privacy: .public)) at status=\(String(describing: self.status))")
+        sessionID &+= 1
+        watchdog.stop()
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        if status == .recording { _ = recorder.stop() }
+        status = .idle
+        // Say so rather than just vanishing: Esc making the pill disappear
+        // silently is indistinguishable from the app dying mid-dictation.
+        overlay.flash(notice, seconds: 1.2)
+    }
+
+    /// The hands-free session went quiet for the whole timeout.
+    ///
+    /// Whether to transcribe what's there is asked of the *audio*, not of the
+    /// level meter that just fired. The meter only knows the room was loud
+    /// enough to keep resetting a timer; a machine running in the background
+    /// clears that bar all session without a word being said, and handing
+    /// Whisper a minute of it produces invented sentences, not silence.
+    private func silenceElapsed() {
+        guard status == .recording, recordingMode == .toggle else { return }
+        let samples = recorder.stop()
+        let seconds = Double(samples.count) / AudioRecorder.targetSampleRate
+        guard SilenceTrimmer.containsSpeech(samples) else {
+            log.notice("auto-stop: \(seconds, format: .fixed(precision: 1))s of room with nothing said — discarded")
+            cancelSession(reason: "silence, nothing said", notice: .noSpeech)
+            return
+        }
+        log.notice("auto-stop after \(self.silenceTimeout, format: .fixed(precision: 0))s of silence")
+        transcribe(samples)
     }
 
     private func stopAndTranscribe() {
@@ -296,8 +413,13 @@ final class AppState: ObservableObject {
             log.notice("keyUp ignored: status=\(String(describing: self.status))")
             return
         }
-        let samples = recorder.stop()
-        log.notice("keyUp: captured \(samples.count) samples (\(Double(samples.count) / 16_000, format: .fixed(precision: 1))s)")
+        watchdog.stop()
+        transcribe(recorder.stop())
+    }
+
+    /// The pipeline every stop funnels into, whoever asked for it.
+    private func transcribe(_ samples: [Float]) {
+        log.notice("captured \(samples.count) samples (\(Double(samples.count) / 16_000, format: .fixed(precision: 1))s)")
 
         // Anything under ~0.3 s is an accidental tap; Whisper hallucinates on near-silence.
         guard samples.count > 4800 else {
@@ -310,10 +432,18 @@ final class AppState: ObservableObject {
         overlay.show(.processing)
         let language = languageCode == "auto" ? nil : languageCode
         log.notice("transcribing: language=\(language ?? "auto")")
-        Task {
-            defer { overlay.hide() }
+        // Every resumption point below re-checks the session: `Task.cancel()`
+        // can't interrupt WhisperKit mid-inference, so the guard — not the
+        // cancellation — is what keeps a cancelled transcript off the cursor.
+        let session = sessionID
+        transcriptionTask = Task {
+            defer { if sessionID == session { overlay.hide() } }
             do {
                 var text = try await transcriber.transcribe(samples, language: language)
+                guard sessionID == session else {
+                    log.notice("transcript dropped: session was cancelled")
+                    return
+                }
                 log.notice("transcript: \(text.count) chars")
                 guard !text.isEmpty else {
                     status = .idle
@@ -321,7 +451,12 @@ final class AppState: ObservableObject {
                 }
                 if cleanupEnabled, text.count > 50 {
                     status = .cleaning
-                    if let cleaned = await OllamaCleaner.clean(text) {
+                    let cleaned = await OllamaCleaner.clean(text)
+                    guard sessionID == session else {
+                        log.notice("cleanup result dropped: session was cancelled")
+                        return
+                    }
+                    if let cleaned {
                         text = cleaned
                         ollamaHealth = .ok
                         log.notice("cleanup ok: \(text.count) chars")
@@ -347,13 +482,17 @@ final class AppState: ObservableObject {
                     // Recover automatically so the hotkey keeps working —
                     // inject() re-checks trust on every attempt anyway.
                     try? await Task.sleep(for: .seconds(4))
-                    if case .error = status { status = .idle }
+                    if sessionID == session, case .error = status { status = .idle }
                 }
             } catch {
+                guard sessionID == session else {
+                    log.notice("transcription error dropped: session was cancelled")
+                    return
+                }
                 log.error("transcription failed: \(error.localizedDescription)")
                 status = .error("Transcription failed: \(error.localizedDescription)")
                 try? await Task.sleep(for: .seconds(3))
-                if case .error = status { status = .idle }
+                if sessionID == session, case .error = status { status = .idle }
             }
         }
     }
