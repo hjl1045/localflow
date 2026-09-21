@@ -206,14 +206,25 @@ never something a script can retry.
 - Ends with `spctl -a -vvv -t install`, which is Gatekeeper's own verdict on the
   stapled bundle — the only check that actually proves it will open.
 
-### ⚠️ The signature change voids your existing permissions
+### The signature change may or may not cost you your permissions — test, don't pre-empt
 
-macOS ties Microphone and Accessibility grants to the code signature. Switching
-from the Apple Development signature to Developer ID makes it a *different* app
-as far as TCC is concerned, so **both grants stop working**. Remove LocalFlow
-from System Settings > Privacy & Security > **Microphone** and > **Accessibility**
-with the − button, then re-add it. A stale entry can display as granted while
-the API still reports untrusted, so remove-then-re-add rather than toggling.
+macOS ties Microphone and Accessibility grants to the code signature, so
+switching from the Apple Development signature to Developer ID *looks* like it
+must make this a different app as far as TCC is concerned. This section used to
+say both grants stop working.
+
+**Measured 2026-09-20: they didn't.** Replacing an `Apple Development`-signed
+copy with the notarized Developer ID build left dictation working immediately —
+`AXIsProcessTrusted=true`, microphone capturing, no prompt, no re-grant. Same
+bundle id and the same `--identifier` on both signatures.
+
+So: **try dictating before you touch System Settings.** One observation isn't a
+guarantee it always survives, but re-granting on principle is busywork, and
+remove-then-re-add is itself disruptive. If it genuinely doesn't work, remove
+LocalFlow from System Settings > Privacy & Security > **Microphone** and >
+**Accessibility** with the − button, then re-add it — a stale entry can display
+as granted while the API still reports untrusted, so remove-then-re-add rather
+than toggling.
 
 ## 3. Publish a release on GitHub
 
