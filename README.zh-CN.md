@@ -156,7 +156,8 @@ ollama pull gemma3:4b
 | 文档 | 内容 |
 |---|---|
 | [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) | 保持模型更新、用自己的音频做基准测试、实测结果 |
-| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | 装到另一台 Mac、发布 release、公证 |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | 装到另一台 Mac、公证、为什么只用 GitHub Releases |
+| [docs/RELEASING.md](docs/RELEASING.md) | 发版流程一步步怎么走，以及踩过的坑 |
 | [docs/FEEDBACK.md](docs/FEEDBACK.md) | 反馈 bug 或崩溃报告、报告去哪里、如何符号化崩溃日志 |
 
 ## 更新检查

@@ -99,11 +99,22 @@ Both sign with Developer ID + hardened runtime, notarize, staple, and install.
 the same bundle id leave LaunchServices and TCC unable to tell which one a
 permission grant belongs to.
 
+⚠️ **Neither of these installs a published release**, despite how
+`install-notarized` reads. They rebuild from source, stamp the result a dev
+build and send it through the notary again — a round-trip you don't need, and a
+binary that is not the one on GitHub and whose `.dSYM` was never archived, so a
+crash from it can't be symbolicated. To get onto a release, use
+`make install-release` ([RELEASING.md](RELEASING.md) §7); it downloads rather
+than builds, needs no certificate or notary credential, and refuses anything
+that isn't Developer ID signed, stapled and Gatekeeper-accepted.
+
 Re-installing over a copy signed with the **same** Developer ID keeps the
 Microphone and Accessibility grants, since TCC keys them to the code signature;
-`install-notarized` inspects the outgoing copy and tells you which case you're in
-rather than always warning. Grants are only voided when the identity changes —
-Apple Development → Developer ID, or a reissued certificate.
+`install-notarized` inspects the outgoing copy and tells you which case you're
+in rather than always warning. An identity change (Apple Development →
+Developer ID, or a reissued certificate) *may* void them — but measured
+2026-09-20 it didn't, so test dictation before re-granting anything. See
+"The signature change may or may not cost you your permissions" below.
 
 A notarized, stapled app passes Gatekeeper anywhere — including a managed Mac
 that refuses un-notarized software. This is the answer to the "MDM requires
@@ -232,48 +243,11 @@ than toggling.
 People download the zip, unzip it, and drag the app to Applications — and since
 v0.2.2 that works by double-clicking, because releases are notarized.
 
-1. Bump `CFBundleShortVersionString` and the integer `CFBundleVersion` in
-   `Support/Info.plist`:
-   ```sh
-   /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 0.2.3' Support/Info.plist
-   /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 5' Support/Info.plist
-   ```
-2. Check the notary credential first — it has vanished before, and recovery needs
-   the Apple ID app-specific password:
-   ```sh
-   xcrun notarytool history --keychain-profile localflow-notary \
-     --keychain ~/Library/Keychains/login.keychain-db >/dev/null && echo ok
-   ```
-3. Build the artifact — notarized, stapled, with its dSYM:
-   ```sh
-   make zip
-   ```
-4. Publish **both** files:
-   ```sh
-   GH_TOKEN="$(gh auth token --user hjl1045)" gh release create v0.2.3 \
-     dist.noindex/LocalFlow-0.2.3.zip dist.noindex/LocalFlow-0.2.3.dSYM.zip \
-     --title "v0.2.3 — …" --notes-file notes.md --latest
-   ```
-5. **Verify it as a stranger receives it**, not from the build tree: download the
-   published zip, confirm its sha256 matches what you built, extract it, and run
-   `spctl -a -vv -t install` on the result. Reading `dist.noindex/` proves nothing
-   about what downloaders get.
-6. Reinstall locally **from the published zip** — `make install-release`. It
-   downloads the latest release (no certificate, notary credential or GitHub
-   auth needed — the repo is public), refuses to install anything that isn't
-   Developer ID signed, stapled and accepted by Gatekeeper, says whether your
-   Microphone/Accessibility grants will survive the swap, and prints the UUID
-   for matching a future crash report to that release's dSYM. Pin an older one
-   with `make install-release RELEASE_TAG=v0.2.4`. Your copy is then
-   byte-identical to what downloaders get, and Settings reads the plain release
-   version.
-
-   ⚠️ **`make install-notarized` is not this.** Despite the name it rebuilds
-   from source, stamps the result as a dev build and sends it through the notary
-   *again* — a second round-trip, and a binary that is not the published one and
-   whose `.dSYM` was never archived, so a crash from it can't be symbolicated
-   against the release. `install-notarized` is for iterating on a
-   Developer-ID-signed build; `install-release` is for getting onto a release.
+**The procedure lives in [RELEASING.md](RELEASING.md)** — version numbering, the
+notary pre-flight, why the version bump is merged before the tag is created,
+publishing both assets, verifying the download rather than the build tree, and
+the traps that have cost time. It is a checklist; this section is the policy
+behind it.
 
 **Release vs dev builds.** Only `make zip` makes a release build (and
 `install-release`, which installs one rather than building it). Every other
