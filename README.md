@@ -156,7 +156,8 @@ The hands-free auto-stop rule has its own headless check — it runs the decisio
 | Doc | What it covers |
 |---|---|
 | [docs/MODEL-UPDATES.md](docs/MODEL-UPDATES.md) | keeping models current, benchmarking on your own audio, measured results |
-| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, publishing a release, notarization |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | installing on another Mac, notarization, why GitHub Releases only |
+| [docs/RELEASING.md](docs/RELEASING.md) | cutting a release, step by step, and the traps that have cost time |
 | [docs/FEEDBACK.md](docs/FEEDBACK.md) | reporting a bug or crash, where reports land, symbolicating a crash report |
 
 ## Updates
