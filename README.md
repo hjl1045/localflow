@@ -55,6 +55,14 @@ make install
 
 That builds the app, installs it to `/Applications`, and launches it. Look for the microphone icon in your menu bar.
 
+Prefer the signed, notarized build Apple has already checked, rather than compiling your own? From the same clone:
+
+```sh
+make install-release
+```
+
+It downloads the latest release, refuses to install it unless Gatekeeper accepts it and its notarization ticket validates, and installs that. No Xcode build, no certificate needed.
+
 On a Mac where you'd rather not write to `/Applications` — a work machine with endpoint security, or one where you don't have admin rights — install into your home folder instead:
 
 ```sh

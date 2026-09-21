@@ -55,6 +55,14 @@ make install
 
 这条命令会编译、安装到 `/Applications` 并启动它。装好后在菜单栏找那个麦克风图标。
 
+不想自己编译，想直接用 Apple 已经检查过的签名版？在同一个 clone 里：
+
+```sh
+make install-release
+```
+
+它会下载最新的 release，先确认 Gatekeeper 接受、公证票据有效，再装上去。不用 Xcode 编译，也不需要证书。
+
 如果这台 Mac 不方便往 `/Applications` 写东西 —— 比如装了端点安全软件的公司电脑，或者你没有管理员权限 —— 可以改装到自己的用户目录：
 
 ```sh

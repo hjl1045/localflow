@@ -247,12 +247,25 @@ v0.2.2 that works by double-clicking, because releases are notarized.
    published zip, confirm its sha256 matches what you built, extract it, and run
    `spctl -a -vv -t install` on the result. Reading `dist.noindex/` proves nothing
    about what downloaders get.
-6. Reinstall locally **from the published zip** (quit LocalFlow, replace
-   `/Applications/LocalFlow.app` with the extracted copy). Your copy is then
+6. Reinstall locally **from the published zip** — `make install-release`. It
+   downloads the latest release (no certificate, notary credential or GitHub
+   auth needed — the repo is public), refuses to install anything that isn't
+   Developer ID signed, stapled and accepted by Gatekeeper, says whether your
+   Microphone/Accessibility grants will survive the swap, and prints the UUID
+   for matching a future crash report to that release's dSYM. Pin an older one
+   with `make install-release RELEASE_TAG=v0.2.4`. Your copy is then
    byte-identical to what downloaders get, and Settings reads the plain release
    version.
 
-**Release vs dev builds.** Only `make zip` makes a release build. Every other
+   ⚠️ **`make install-notarized` is not this.** Despite the name it rebuilds
+   from source, stamps the result as a dev build and sends it through the notary
+   *again* — a second round-trip, and a binary that is not the published one and
+   whose `.dSYM` was never archived, so a crash from it can't be symbolicated
+   against the release. `install-notarized` is for iterating on a
+   Developer-ID-signed build; `install-release` is for getting onto a release.
+
+**Release vs dev builds.** Only `make zip` makes a release build (and
+`install-release`, which installs one rather than building it). Every other
 target (`install`, `install-notarized`, `run`, `bench`) keeps the release's
 version number but stamps the bundle with a dev build number, such as
 `6-dev-cf1123f` (plus `-dirty` with uncommitted changes). Settings then shows
