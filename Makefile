@@ -54,7 +54,7 @@ ifeq ($(SIGN),)
 SIGN := -
 endif
 
-.PHONY: build bundle run install install-user uninstall-user notarize install-notarized install-notarized-user zip bench bench-init check-updates clean
+.PHONY: build bundle run install install-user uninstall-user notarize install-notarized install-notarized-user install-release zip bench bench-init check-updates clean
 
 build:
 	swift build -c $(CONFIG)
@@ -251,6 +251,83 @@ uninstall-user:
 # This costs a notary round-trip per release, which is why it depends on
 # `notarize` rather than `bundle`. The artifact IS the notarized bundle — do not
 # re-sign it here, or the stapled ticket stops matching.
+# Put this Mac on the PUBLISHED build — the exact bytes a downloader receives.
+#
+# **This is not `install-notarized`.** Despite the name, that one rebuilds from
+# source, stamps the result `X.Y.Z (N-dev-<sha>)` and sends it through the
+# notary *again*: a second round-trip, and a binary that is not the released one
+# — whose .dSYM was never archived, so a crash from it can't be symbolicated
+# against the release. Use `install-notarized` while iterating on a
+# Developer-ID-signed build; use this after cutting a release. Reaching for the
+# wrong one cost an unnecessary notarization and a TCC re-grant (2026-09-20).
+#
+# Downloads rather than reading $(DIST)/: what has to be true is that the
+# artifact *strangers* receive works, and the build tree cannot prove that. It
+# needs no certificate, no notary credential and no GitHub auth — the repo is
+# public — so this is also the right target for anyone installing LocalFlow
+# from source, not just the author.
+# The release lookup fetches and parses as two steps on purpose: piped straight
+# into python3, curl's 404 is masked by the pipe and a wrong tag surfaces as a
+# JSON traceback instead of "no such release". Note also that every line of the
+# recipe below is one backslash-continued shell command, so a `#` comment inside
+# it would comment out the rest of the recipe — explanations belong up here.
+REPO ?= hjl1045/localflow
+# Override to pin a version: `make install-release RELEASE_TAG=v0.2.4`.
+RELEASE_TAG ?= latest
+install-release:
+	@echo "Asking GitHub for $(REPO) $(RELEASE_TAG)…"
+	@set -e; \
+	if [ "$(RELEASE_TAG)" = "latest" ]; then api="releases/latest"; else api="releases/tags/$(RELEASE_TAG)"; fi; \
+	json=$$(curl -fsSL -H 'User-Agent: localflow-make' "https://api.github.com/repos/$(REPO)/$$api") \
+		|| { echo "ERROR: no release '$(RELEASE_TAG)' on $(REPO), or GitHub is unreachable"; exit 1; }; \
+	meta=$$(printf '%s' "$$json" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=[x for x in d["assets"] if x["name"].endswith(".zip") and "dSYM" not in x["name"]]; sys.exit(1) if not a else print(d["tag_name"], a[0]["browser_download_url"])') \
+		|| { echo "ERROR: release '$(RELEASE_TAG)' publishes no $(APP) .app zip"; exit 1; }; \
+	tag=$${meta%% *}; url=$${meta##* }; \
+	dl="$(DIST)/release-download"; \
+	rm -rf "$$dl" && mkdir -p "$$dl"; \
+	echo "Downloading $$url"; \
+	curl -fsSL -o "$$dl/$(APP).zip" "$$url"; \
+	shasum -a 256 "$$dl/$(APP).zip"; \
+	ditto -x -k "$$dl/$(APP).zip" "$$dl"; \
+	app="$$dl/$(APP).app"; \
+	[ -d "$$app" ] || { echo "ERROR: the zip did not contain $(APP).app"; exit 1; }; \
+	echo "--- verifying the download before it goes anywhere near /Applications ---"; \
+	codesign -dvvv "$$app" 2>&1 | grep -q "Authority=Developer ID Application" \
+		|| { echo "ERROR: download is not Developer ID signed — refusing to install"; exit 1; }; \
+	xcrun stapler validate "$$app" >/dev/null 2>&1 \
+		|| { echo "ERROR: download has no stapled ticket — refusing to install"; exit 1; }; \
+	spctl -a -vv -t install "$$app" \
+		|| { echo "ERROR: Gatekeeper rejected the download — refusing to install"; exit 1; }; \
+	got=$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$$app/Contents/Info.plist"); \
+	case "$$got" in *-dev-*) echo "ERROR: $$tag publishes a DEV build ($$got) — refusing to install"; exit 1;; esac; \
+	pkill -x $(APP) || true; \
+	if [ -d "$(USERAPPS)/$(APP).app" ]; then \
+		echo "WARNING: $(USERAPPS)/$(APP).app also exists."; \
+		echo "         Two copies of the same bundle id make LaunchServices and TCC ambiguous."; \
+		echo "         Remove it with:  make uninstall-user"; \
+	fi; \
+	incoming=$$(codesign -dvvv "$$app" 2>&1 | awk -F= '/^Authority=/{print $$2; exit}'); \
+	if [ -d "/Applications/$(APP).app" ]; then \
+		was=$$(codesign -dvvv "/Applications/$(APP).app" 2>&1 | awk -F= '/^Authority=/{print $$2; exit}'); \
+		if [ "$$was" = "$$incoming" ]; then \
+			echo "Replacing a copy signed with the same identity — Microphone/Accessibility grants carry over."; \
+		else \
+			echo "NOTE: the installed copy was signed '$$was', replacing it with '$$incoming'."; \
+			echo "      The signature changes, so Microphone + Accessibility grants are VOID."; \
+			echo "      Remove LocalFlow from both lists in System Settings > Privacy & Security"; \
+			echo "      and re-add it (remove-then-re-add, not toggle)."; \
+		fi; \
+	fi; \
+	rm -rf /Applications/$(APP).app; \
+	ditto "$$app" /Applications/$(APP).app; \
+	sleep 2; \
+	echo "Installed published $$tag at /Applications/$(APP).app."; \
+	spctl -a -vv -t install /Applications/$(APP).app; \
+	echo "Match a crash report from this build against $$tag's dSYM by UUID:"; \
+	dwarfdump --uuid /Applications/$(APP).app/Contents/MacOS/$(APP); \
+	rm -rf "$$dl"; \
+	open /Applications/$(APP).app
+
 zip: SIGN = $(DEVID)
 zip: RELEASE = 1
 zip: notarize
