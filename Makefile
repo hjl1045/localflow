@@ -153,10 +153,15 @@ notarize: bundle
 # that won't take /Applications.
 #
 # TCC note: grants are keyed to the code signature, so re-installing over a copy
-# signed with the SAME Developer ID keeps Microphone and Accessibility. They are
-# only voided when the identity changes (Apple Development → Developer ID, or a
-# reissued certificate) — which is why this refuses to guess and just reports
-# what the outgoing copy was signed with.
+# signed with the SAME Developer ID keeps Microphone and Accessibility — measured
+# twice, 2026-09-12.
+#
+# An identity change (Apple Development → Developer ID, or a reissued cert) was
+# long assumed to void them. **That assumption was wrong, or at least not
+# reliable:** on 2026-09-20 exactly that swap kept both grants — the replacement
+# app dictated immediately, `AXIsProcessTrusted=true`, no prompt and no re-grant.
+# So this reports what the outgoing copy was signed with and tells you to TEST,
+# rather than sending you to System Settings for work you probably don't need.
 install-notarized: SIGN = $(DEVID)
 install-notarized: notarize
 	-pkill -x $(APP)
@@ -172,9 +177,13 @@ install-notarized: notarize
 			echo "Replacing a copy signed with the same identity — Microphone/Accessibility grants carry over."; \
 		else \
 			echo "NOTE: the installed copy was signed '$$was', replacing it with '$(DEVID)'."; \
-			echo "      The signature changes, so Microphone + Accessibility grants are VOID."; \
-			echo "      Remove LocalFlow from both lists in System Settings > Privacy & Security"; \
-			echo "      and re-add it (remove-then-re-add, not toggle)."; \
+			echo "      TEST DICTATION FIRST. The signature changed, so Microphone and"; \
+			echo "      Accessibility MAY have been voided — but measured 2026-09-20 they"; \
+			echo "      survived exactly this swap, so re-granting blindly is busywork."; \
+			echo "      Only if it does not work: remove LocalFlow from both lists in"; \
+			echo "      System Settings > Privacy & Security and re-add it (remove-then-"; \
+			echo "      re-add, not toggle — a stale entry shows as granted while the"; \
+			echo "      API reports untrusted)."; \
 		fi; \
 	fi
 	rm -rf /Applications/$(APP).app
@@ -313,9 +322,13 @@ install-release:
 			echo "Replacing a copy signed with the same identity — Microphone/Accessibility grants carry over."; \
 		else \
 			echo "NOTE: the installed copy was signed '$$was', replacing it with '$$incoming'."; \
-			echo "      The signature changes, so Microphone + Accessibility grants are VOID."; \
-			echo "      Remove LocalFlow from both lists in System Settings > Privacy & Security"; \
-			echo "      and re-add it (remove-then-re-add, not toggle)."; \
+			echo "      TEST DICTATION FIRST. The signature changed, so Microphone and"; \
+			echo "      Accessibility MAY have been voided — but measured 2026-09-20 they"; \
+			echo "      survived exactly this swap, so re-granting blindly is busywork."; \
+			echo "      Only if it does not work: remove LocalFlow from both lists in"; \
+			echo "      System Settings > Privacy & Security and re-add it (remove-then-"; \
+			echo "      re-add, not toggle — a stale entry shows as granted while the"; \
+			echo "      API reports untrusted)."; \
 		fi; \
 	fi; \
 	rm -rf /Applications/$(APP).app; \
